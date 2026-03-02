@@ -145,10 +145,11 @@ export function detectPrice(element: Element): DetectedPrice | null {
       return tryRegexDetection((element.textContent ?? '').trim());
     }
 
-    // Element with children: only check direct text nodes to avoid matching
-    // prices buried deep in containers (keeps hitbox tight)
+    // Element with children: only check direct text nodes, and only when
+    // the direct text is short (≤ 30 chars). Long text means the price is
+    // embedded in a sentence — the hitbox would cover the entire element.
     const direct = directTextContent(element);
-    if (!direct) return null;
+    if (!direct || direct.length > 30) return null;
     return tryRegexDetection(direct);
   } catch {
     return null;
