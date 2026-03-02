@@ -17,6 +17,7 @@ export interface StoredRates {
 export interface DetectedPrice {
   amount: number;
   currencyCode: string;
+  matchedText?: string; // raw text matched by regex, used for Range-based positioning
 }
 
 export interface ConvertedPrice {

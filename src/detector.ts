@@ -119,7 +119,7 @@ function tryRegexDetection(text: string): DetectedPrice | null {
   const amount = normalizeAmount(rawAmount);
   if (isNaN(amount) || amount <= 0) return null;
 
-  return { amount, currencyCode };
+  return { amount, currencyCode, matchedText: match[0] };
 }
 
 /**
@@ -145,11 +145,11 @@ export function detectPrice(element: Element): DetectedPrice | null {
       return tryRegexDetection((element.textContent ?? '').trim());
     }
 
-    // Element with children: only check direct text nodes, and only when
-    // the direct text is short (≤ 30 chars). Long text means the price is
-    // embedded in a sentence — the hitbox would cover the entire element.
+    // Non-leaf: check direct text nodes only.
+    // The hitbox will be resolved to the exact matched text via Range API in content.ts,
+    // so there's no risk of triggering on the whole element.
     const direct = directTextContent(element);
-    if (!direct || direct.length > 30) return null;
+    if (!direct) return null;
     return tryRegexDetection(direct);
   } catch {
     return null;
