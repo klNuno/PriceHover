@@ -40,6 +40,8 @@ export const CURRENCIES: Currency[] = [
   { code: 'PEN', symbol: 'S/.', flag: '🇵🇪', name: 'Peruvian Sol' },
   { code: 'KWD', symbol: 'KD', flag: '🇰🇼', name: 'Kuwaiti Dinar' },
   { code: 'QAR', symbol: 'QR', flag: '🇶🇦', name: 'Qatari Riyal' },
+  { code: 'COP', symbol: 'COL$', flag: '🇨🇴', name: 'Colombian Peso' },
+  { code: 'CLP', symbol: 'CLP$', flag: '🇨🇱', name: 'Chilean Peso' },
 ];
 
 export const CURRENCY_BY_CODE = new Map(CURRENCIES.map((c) => [c.code, c]));
@@ -62,6 +64,9 @@ export const SYMBOL_TO_CODE: Record<string, string> = {
   '₸': 'KZT',
   '₪': 'ILS',
   '₡': 'CRC',
+  'COL$': 'COP',
+  'CLP$': 'CLP',
+  'MX$': 'MXN',
   'R$': 'BRL',
   'A$': 'AUD',
   'CA$': 'CAD',

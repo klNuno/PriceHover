@@ -30,6 +30,7 @@ export const STORAGE = {
   RATES: 'rates',
   RATES_TS: 'ratesTimestamp',
   CURRENCIES: 'selectedCurrencies',
+  EXCLUDED: 'excludedCurrencies',
 } as const;
 
 export const DEFAULT_CURRENCIES = ['EUR', 'USD', 'GBP'];

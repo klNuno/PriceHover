@@ -4,7 +4,7 @@ import { SYMBOL_TO_CODE } from './currencies';
 // Multi-char symbols must come BEFORE single-char to win in alternation.
 const SYM =
   // Multi-char dollar variants (longest first)
-  'CA\\$|HK\\$|NZ\\$|A\\$|R\\$|S\\$|' +
+  'COL\\$|CLP\\$|MX\\$|CA\\$|HK\\$|NZ\\$|A\\$|R\\$|S\\$|' +
   // Other multi-char symbols
   'S/\\.|\\$U|' +                               // PEN (S/.), UYU ($U)
   'Rp|RM|SR|QR|KD|kr|zł|R|' +                  // IDR, MYR, SAR, QAR, KWD, SEK/NOK/DKK, PLN, ZAR
