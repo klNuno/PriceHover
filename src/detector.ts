@@ -96,10 +96,7 @@ function trySemanticDetection(element: Element): DetectedPrice | null {
   return null;
 }
 
-function tryRegexDetection(text: string): DetectedPrice | null {
-  const match = PRICE_REGEX.exec(text);
-  if (!match) return null;
-
+function parseMatch(match: RegExpExecArray): DetectedPrice | null {
   let symbolOrCode: string;
   let rawAmount: string;
 
@@ -122,6 +119,23 @@ function tryRegexDetection(text: string): DetectedPrice | null {
   return { amount, currencyCode, matchedText: match[0] };
 }
 
+function tryRegexDetection(text: string): DetectedPrice | null {
+  const match = PRICE_REGEX.exec(text);
+  if (!match) return null;
+  return parseMatch(match);
+}
+
+function tryRegexDetectionAll(text: string): DetectedPrice[] {
+  const globalRegex = new RegExp(PRICE_REGEX.source, 'gi');
+  const results: DetectedPrice[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = globalRegex.exec(text)) !== null) {
+    const price = parseMatch(match);
+    if (price) results.push(price);
+  }
+  return results;
+}
+
 /**
  * Get text from direct text nodes only (excludes child element text).
  * Handles cases like <td><span>-20%</span> ¥ 159.71</td> where the price
@@ -135,25 +149,25 @@ function directTextContent(element: Element): string {
   return text.trim();
 }
 
-export function detectPrice(element: Element): DetectedPrice | null {
+export function detectPricesFromElement(element: Element): DetectedPrice[] {
   try {
     const semantic = trySemanticDetection(element);
-    if (semantic) return semantic;
+    if (semantic) return [semantic];
 
-    // Leaf node: use full textContent
-    if (element.childElementCount === 0) {
-      return tryRegexDetection((element.textContent ?? '').trim());
-    }
+    const text = element.childElementCount === 0
+      ? (element.textContent ?? '').trim()
+      : directTextContent(element);
 
-    // Non-leaf: check direct text nodes only.
-    // The hitbox will be resolved to the exact matched text via Range API in content.ts,
-    // so there's no risk of triggering on the whole element.
-    const direct = directTextContent(element);
-    if (!direct) return null;
-    return tryRegexDetection(direct);
+    if (!text) return [];
+    return tryRegexDetectionAll(text);
   } catch {
-    return null;
+    return [];
   }
+}
+
+// Kept for selection-based detection (single match is sufficient there)
+export function detectPrice(element: Element): DetectedPrice | null {
+  return detectPricesFromElement(element)[0] ?? null;
 }
 
 export function detectPriceFromText(text: string): DetectedPrice | null {
