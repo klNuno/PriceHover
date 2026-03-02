@@ -4,6 +4,7 @@
   import { STORAGE, DEFAULT_CURRENCIES } from '../../src/types';
 
   let selectedCodes = $state<string[]>(DEFAULT_CURRENCIES);
+  let excludedCodes = $state<string[]>([]);
   let searchQuery = $state('');
 
   const filteredCurrencies = $derived(
@@ -16,38 +17,59 @@
       : CURRENCIES
   );
 
-  // storage.sync requires a permanent addon ID in Firefox dev mode — fall back to local
-  async function storageGet(): Promise<Record<string, unknown>> {
-    try { return await chrome.storage.sync.get([STORAGE.CURRENCIES]); } catch {}
-    try { return await chrome.storage.local.get([STORAGE.CURRENCIES]); } catch {}
-    return {};
-  }
+  // Write to both sync and local so either read path finds data.
   async function storageSet(data: Record<string, unknown>): Promise<void> {
-    try { await chrome.storage.sync.set(data); return; } catch {}
+    try { await chrome.storage.sync.set(data); } catch {}
     try { await chrome.storage.local.set(data); } catch {}
+  }
+
+  // Try sync first; if empty, fall back to local (handles Firefox dev mode
+  // where sync.set fails silently and data ends up only in local).
+  async function storageGet(): Promise<Record<string, unknown>> {
+    const keys = [STORAGE.CURRENCIES, STORAGE.EXCLUDED];
+    try {
+      const r = await chrome.storage.sync.get(keys);
+      if (r[STORAGE.CURRENCIES] !== undefined) return r;
+    } catch {}
+    try { return await chrome.storage.local.get(keys); } catch {}
+    return {};
   }
 
   onMount(async () => {
     const result = await storageGet();
     if (result[STORAGE.CURRENCIES]) selectedCodes = result[STORAGE.CURRENCIES] as string[];
+    if (result[STORAGE.EXCLUDED]) excludedCodes = result[STORAGE.EXCLUDED] as string[];
   });
 
-  function isSelected(code: string): boolean {
-    return selectedCodes.includes(code);
+  function getState(code: string): 'included' | 'excluded' | 'none' {
+    if (selectedCodes.includes(code)) return 'included';
+    if (excludedCodes.includes(code)) return 'excluded';
+    return 'none';
   }
 
   async function toggleCurrency(code: string): Promise<void> {
-    selectedCodes = isSelected(code)
-      ? selectedCodes.filter((c) => c !== code)
-      : [...selectedCodes, code];
-    await storageSet({ [STORAGE.CURRENCIES]: selectedCodes });
+    const state = getState(code);
+    if (state === 'none') {
+      selectedCodes = [...selectedCodes, code];
+    } else if (state === 'included') {
+      selectedCodes = selectedCodes.filter((c) => c !== code);
+      excludedCodes = [...excludedCodes, code];
+    } else {
+      excludedCodes = excludedCodes.filter((c) => c !== code);
+    }
+    await storageSet({
+      [STORAGE.CURRENCIES]: selectedCodes,
+      [STORAGE.EXCLUDED]: excludedCodes,
+    });
   }
 </script>
 
 <div class="popup">
   <header class="header">
     <span class="title">PriceHover</span>
-    <span class="count">{selectedCodes.length} selected</span>
+    <span class="count">
+      {selectedCodes.length} incl{#if excludedCodes.length} · {excludedCodes.length} excl{/if}
+    </span>
   </header>
 
   <div class="search-wrap">
@@ -61,18 +83,23 @@
 
   <ul class="list">
     {#each filteredCurrencies as currency (currency.code)}
-      {@const selected = isSelected(currency.code)}
+      {@const state = getState(currency.code)}
       <li>
-        <label class="row" class:selected>
+        <label class="row" class:included={state === 'included'} class:excluded={state === 'excluded'}>
           <input
             type="checkbox"
             class="sr-only"
-            checked={selected}
             onchange={() => toggleCurrency(currency.code)}
           />
           <span class="code">{currency.code}</span>
           <span class="name">{currency.name}</span>
-          {#if selected}<span class="check">✓</span>{/if}
+          {#if state === 'included'}
+            <span class="indicator check">✓</span>
+          {:else if state === 'excluded'}
+            <span class="indicator cross">✕</span>
+          {:else}
+            <span class="indicator"></span>
+          {/if}
         </label>
       </li>
     {/each}
@@ -80,6 +107,14 @@
       <li class="empty">No results</li>
     {/if}
   </ul>
+
+  <div class="legend">
+    <span>click: include</span>
+    <span class="sep">·</span>
+    <span>click again: exclude</span>
+    <span class="sep">·</span>
+    <span>once more: reset</span>
+  </div>
 </div>
 
 <style>
@@ -93,6 +128,10 @@
     --fg2: #666666;
     --accent: #000000;
     --border: #e0e0e0;
+    --green: #1a8c2a;
+    --red: #c0392b;
+    --bg-incl: #f0faf0;
+    --bg-excl: #fdf2f2;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -104,6 +143,10 @@
       --fg2: #888888;
       --accent: #ffffff;
       --border: #2a2a2a;
+      --green: #5fcc6f;
+      --red: #e05c5c;
+      --bg-incl: #152015;
+      --bg-excl: #201515;
     }
   }
 
@@ -111,7 +154,7 @@
     width: max-content;
     min-width: 220px;
     max-width: 340px;
-    max-height: 480px;
+    max-height: 520px;
     background: var(--bg);
     color: var(--fg);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -158,10 +201,7 @@
     outline: none;
   }
 
-  .search:focus {
-    border-color: var(--accent);
-  }
-
+  .search:focus { border-color: var(--accent); }
   .search::placeholder { color: var(--fg2); }
   .search::-webkit-search-cancel-button { -webkit-appearance: none; }
 
@@ -175,7 +215,7 @@
 
   .row {
     display: grid;
-    grid-template-columns: 38px 1fr 14px;
+    grid-template-columns: 38px 1fr 16px;
     align-items: center;
     gap: 0 8px;
     padding: 7px 14px;
@@ -185,7 +225,8 @@
   }
 
   .row:hover { background: var(--bg2); }
-  .row.selected { background: var(--bg3); }
+  .row.included { background: var(--bg-incl); }
+  .row.excluded { background: var(--bg-excl); }
 
   .code {
     font-weight: 600;
@@ -198,12 +239,25 @@
     white-space: nowrap;
   }
 
-  .check {
+  .indicator {
     font-size: 11px;
     font-weight: 700;
-    color: var(--accent);
     text-align: right;
   }
+
+  .check { color: var(--green); }
+  .cross { color: var(--red); }
+
+  .legend {
+    display: flex;
+    gap: 4px;
+    padding: 6px 14px;
+    border-top: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--fg2);
+  }
+
+  .sep { color: var(--border); }
 
   .empty {
     padding: 16px 14px;

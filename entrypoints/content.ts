@@ -38,6 +38,7 @@ export default defineContentScript({
 
     let cachedRates: ExchangeRates | null = null;
     let cachedCurrencies: string[] = DEFAULT_CURRENCIES;
+    let cachedExcluded: string[] = [];
     let cacheLoadedAt = 0;
     const CACHE_TTL = 10_000;
 
@@ -56,12 +57,18 @@ export default defineContentScript({
         E('sendMessage getRates failed', err);
       }
 
-      // storage.sync requires a permanent addon ID in Firefox — fall back to local
+      // storage.sync requires a permanent addon ID in Firefox — fall back to local.
+      // Try sync first; if empty, check local (mirrors popup storageGet logic).
       try {
-        const store = await chrome.storage.sync.get([STORAGE.CURRENCIES])
-          .catch(() => chrome.storage.local.get([STORAGE.CURRENCIES]));
+        const keys = [STORAGE.CURRENCIES, STORAGE.EXCLUDED];
+        let store = await chrome.storage.sync.get(keys)
+          .catch(() => chrome.storage.local.get(keys));
+        if (!store[STORAGE.CURRENCIES]) {
+          store = await chrome.storage.local.get(keys).catch(() => ({}));
+        }
         L('currencies storage:', store);
-        if (store[STORAGE.CURRENCIES]) cachedCurrencies = store[STORAGE.CURRENCIES];
+        if (store[STORAGE.CURRENCIES]) cachedCurrencies = store[STORAGE.CURRENCIES] as string[];
+        if (store[STORAGE.EXCLUDED]) cachedExcluded = store[STORAGE.EXCLUDED] as string[];
       } catch (err) {
         E('storage currencies get failed', err);
       }
@@ -154,7 +161,8 @@ export default defineContentScript({
         if (!target || target === host) return;
 
         try {
-          const prices = detectPricesFromElement(target);
+          const allPrices = detectPricesFromElement(target);
+          const prices = allPrices.filter(p => !cachedExcluded.includes(p.currencyCode));
           if (!prices.length) { hideTooltip(); return; }
 
           L('detected price:', prices, 'on element:', target.tagName, target.textContent?.trim().slice(0, 30));
@@ -195,7 +203,7 @@ export default defineContentScript({
       if (!text) { hideTooltip(); return; }
 
       const detected = detectPriceFromText(text);
-      if (!detected) { hideTooltip(); return; }
+      if (!detected || cachedExcluded.includes(detected.currencyCode)) { hideTooltip(); return; }
 
       L('detected from selection:', detected);
       const range = selection.getRangeAt(0);
