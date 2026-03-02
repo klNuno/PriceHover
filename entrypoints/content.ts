@@ -34,7 +34,7 @@ export default defineContentScript({
     shadow.appendChild(container);
 
     let tooltipInstance: ReturnType<typeof mount> | null = null;
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let rafId: number | null = null;
 
     let cachedRates: ExchangeRates | null = null;
     let cachedCurrencies: string[] = DEFAULT_CURRENCIES;
@@ -129,10 +129,27 @@ export default defineContentScript({
       L('tooltip mounted');
     }
 
-    function onMouseOver(e: MouseEvent): void {
-      if (debounceTimer) clearTimeout(debounceTimer);
+    function findPriceRange(element: Element, matchedText: string): Range | null {
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        const content = node.textContent ?? '';
+        const idx = content.indexOf(matchedText);
+        if (idx !== -1) {
+          const range = document.createRange();
+          range.setStart(node, idx);
+          range.setEnd(node, idx + matchedText.length);
+          return range;
+        }
+      }
+      return null;
+    }
 
-      debounceTimer = setTimeout(() => {
+    function onMouseOver(e: MouseEvent): void {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
         const target = e.target as Element | null;
         if (!target || target === host) return;
 
@@ -141,19 +158,33 @@ export default defineContentScript({
           if (!detected) { hideTooltip(); return; }
 
           L('detected price:', detected, 'on element:', target.tagName, target.textContent?.trim().slice(0, 30));
+
+          // Use Range to position tooltip above the exact price text.
+          // No cursor check — mouseover only fires on element entry, so a check
+          // would silently fail if the cursor entered from a non-price area.
+          if (detected.matchedText) {
+            const range = findPriceRange(target, detected.matchedText);
+            if (range) {
+              const rect = range.getBoundingClientRect();
+              if (rect.width > 0) {
+                showTooltip(detected, rect.left + rect.width / 2, rect.top);
+                return;
+              }
+            }
+          }
+
+          // Fallback: semantic detection or Range not found.
           const rect = target.getBoundingClientRect();
-          // X = cursor (naturally near the price text inside the element)
-          // Y = element top (anchored, doesn't jump when moving within element)
-          showTooltip(detected, e.clientX, rect.top);
+          showTooltip(detected, rect.left + rect.width / 2, rect.top);
         } catch (err) {
           E('onMouseOver error', err);
           hideTooltip();
         }
-      }, 80);
+      });
     }
 
     function onMouseOut(): void {
-      if (debounceTimer) clearTimeout(debounceTimer);
+      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
       hideTooltip();
     }
 
