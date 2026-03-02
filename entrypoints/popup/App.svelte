@@ -17,14 +17,11 @@
       : CURRENCIES
   );
 
-  // Write to both sync and local so either read path finds data.
   async function storageSet(data: Record<string, unknown>): Promise<void> {
     try { await chrome.storage.sync.set(data); } catch {}
     try { await chrome.storage.local.set(data); } catch {}
   }
 
-  // Try sync first; if empty, fall back to local (handles Firefox dev mode
-  // where sync.set fails silently and data ends up only in local).
   async function storageGet(): Promise<Record<string, unknown>> {
     const keys = [STORAGE.CURRENCIES, STORAGE.EXCLUDED];
     try {
@@ -41,35 +38,25 @@
     if (result[STORAGE.EXCLUDED]) excludedCodes = result[STORAGE.EXCLUDED] as string[];
   });
 
-  function getState(code: string): 'included' | 'excluded' | 'none' {
-    if (selectedCodes.includes(code)) return 'included';
-    if (excludedCodes.includes(code)) return 'excluded';
-    return 'none';
+  async function toggleInclude(code: string): Promise<void> {
+    selectedCodes = selectedCodes.includes(code)
+      ? selectedCodes.filter((c) => c !== code)
+      : [...selectedCodes, code];
+    await storageSet({ [STORAGE.CURRENCIES]: selectedCodes, [STORAGE.EXCLUDED]: excludedCodes });
   }
 
-  async function toggleCurrency(code: string): Promise<void> {
-    const state = getState(code);
-    if (state === 'none') {
-      selectedCodes = [...selectedCodes, code];
-    } else if (state === 'included') {
-      selectedCodes = selectedCodes.filter((c) => c !== code);
-      excludedCodes = [...excludedCodes, code];
-    } else {
-      excludedCodes = excludedCodes.filter((c) => c !== code);
-    }
-    await storageSet({
-      [STORAGE.CURRENCIES]: selectedCodes,
-      [STORAGE.EXCLUDED]: excludedCodes,
-    });
+  async function toggleExclude(code: string): Promise<void> {
+    excludedCodes = excludedCodes.includes(code)
+      ? excludedCodes.filter((c) => c !== code)
+      : [...excludedCodes, code];
+    await storageSet({ [STORAGE.CURRENCIES]: selectedCodes, [STORAGE.EXCLUDED]: excludedCodes });
   }
 </script>
 
 <div class="popup">
   <header class="header">
     <span class="title">PriceHover</span>
-    <span class="count">
-      {selectedCodes.length} incl{#if excludedCodes.length} · {excludedCodes.length} excl{/if}
-    </span>
+    <span class="count">{selectedCodes.length} selected</span>
   </header>
 
   <div class="search-wrap">
@@ -81,40 +68,38 @@
     />
   </div>
 
+  <div class="col-labels">
+    <span></span>
+    <span></span>
+    <span class="col-label">show</span>
+    <span class="col-label">mute</span>
+  </div>
+
   <ul class="list">
     {#each filteredCurrencies as currency (currency.code)}
-      {@const state = getState(currency.code)}
-      <li>
-        <label class="row" class:included={state === 'included'} class:excluded={state === 'excluded'}>
-          <input
-            type="checkbox"
-            class="sr-only"
-            onchange={() => toggleCurrency(currency.code)}
-          />
-          <span class="code">{currency.code}</span>
-          <span class="name">{currency.name}</span>
-          {#if state === 'included'}
-            <span class="indicator check">✓</span>
-          {:else if state === 'excluded'}
-            <span class="indicator cross">✕</span>
-          {:else}
-            <span class="indicator"></span>
-          {/if}
-        </label>
+      {@const included = selectedCodes.includes(currency.code)}
+      {@const excluded = excludedCodes.includes(currency.code)}
+      <li class="row" class:included class:excluded>
+        <span class="code">{currency.code}</span>
+        <span class="name">{currency.name}</span>
+        <button
+          class="btn-check"
+          class:active={included}
+          onclick={() => toggleInclude(currency.code)}
+          title="Show in conversions"
+        >✓</button>
+        <button
+          class="btn-mute"
+          class:active={excluded}
+          onclick={() => toggleExclude(currency.code)}
+          title="Suppress tooltip when source is this currency"
+        >✕</button>
       </li>
     {/each}
     {#if filteredCurrencies.length === 0}
       <li class="empty">No results</li>
     {/if}
   </ul>
-
-  <div class="legend">
-    <span>click: include</span>
-    <span class="sep">·</span>
-    <span>click again: exclude</span>
-    <span class="sep">·</span>
-    <span>once more: reset</span>
-  </div>
 </div>
 
 <style>
@@ -130,8 +115,6 @@
     --border: #e0e0e0;
     --green: #1a8c2a;
     --red: #c0392b;
-    --bg-incl: #f0faf0;
-    --bg-excl: #fdf2f2;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -145,16 +128,14 @@
       --border: #2a2a2a;
       --green: #5fcc6f;
       --red: #e05c5c;
-      --bg-incl: #152015;
-      --bg-excl: #201515;
     }
   }
 
   .popup {
     width: max-content;
-    min-width: 220px;
+    min-width: 240px;
     max-width: 340px;
-    max-height: 520px;
+    max-height: 500px;
     background: var(--bg);
     color: var(--fg);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -172,22 +153,12 @@
     border-bottom: 1px solid var(--border);
   }
 
-  .title {
-    font-weight: 700;
-    font-size: 13px;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-  }
-
-  .count {
-    font-size: 11px;
-    color: var(--fg2);
-  }
+  .title { font-weight: 700; font-size: 13px; letter-spacing: 0.03em; text-transform: uppercase; }
+  .count { font-size: 11px; color: var(--fg2); }
 
   .search-wrap {
     padding: 8px 10px;
     border-bottom: 1px solid var(--border);
-    width: 100%;
   }
 
   .search {
@@ -200,10 +171,24 @@
     font-size: 12px;
     outline: none;
   }
-
   .search:focus { border-color: var(--accent); }
   .search::placeholder { color: var(--fg2); }
   .search::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+  .col-labels {
+    display: grid;
+    grid-template-columns: 38px 1fr 28px 28px;
+    gap: 0 4px;
+    padding: 4px 14px 2px;
+    border-bottom: 1px solid var(--border);
+  }
+  .col-label {
+    font-size: 10px;
+    color: var(--fg2);
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
 
   .list {
     flex: 1;
@@ -215,63 +200,48 @@
 
   .row {
     display: grid;
-    grid-template-columns: 38px 1fr 16px;
+    grid-template-columns: 38px 1fr 28px 28px;
     align-items: center;
-    gap: 0 8px;
-    padding: 7px 14px;
-    cursor: pointer;
-    user-select: none;
+    gap: 0 4px;
+    padding: 5px 14px;
     transition: background 0.08s;
   }
-
   .row:hover { background: var(--bg2); }
-  .row.included { background: var(--bg-incl); }
-  .row.excluded { background: var(--bg-excl); }
 
-  .code {
-    font-weight: 600;
-    font-size: 12px;
-  }
+  .code { font-weight: 600; font-size: 12px; }
+  .name { color: var(--fg2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  .name {
-    color: var(--fg2);
-    font-size: 12px;
-    white-space: nowrap;
-  }
-
-  .indicator {
+  .btn-check,
+  .btn-mute {
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: none;
+    cursor: pointer;
     font-size: 11px;
     font-weight: 700;
-    text-align: right;
-  }
-
-  .check { color: var(--green); }
-  .cross { color: var(--red); }
-
-  .legend {
+    color: var(--fg2);
     display: flex;
-    gap: 4px;
-    padding: 6px 14px;
-    border-top: 1px solid var(--border);
-    font-size: 10px;
-    color: var(--fg2);
+    align-items: center;
+    justify-content: center;
+    justify-self: center;
+    transition: background 0.08s, color 0.08s, border-color 0.08s;
   }
 
-  .sep { color: var(--border); }
-
-  .empty {
-    padding: 16px 14px;
-    color: var(--fg2);
-    font-size: 12px;
+  .btn-check.active {
+    background: var(--green);
+    border-color: var(--green);
+    color: #fff;
+  }
+  .btn-mute.active {
+    background: var(--red);
+    border-color: var(--red);
+    color: #fff;
   }
 
-  .sr-only {
-    position: absolute;
-    width: 1px; height: 1px;
-    padding: 0; margin: -1px;
-    overflow: hidden;
-    clip: rect(0,0,0,0);
-    white-space: nowrap;
-    border: 0;
-  }
+  .btn-check:hover:not(.active) { border-color: var(--green); color: var(--green); }
+  .btn-mute:hover:not(.active)  { border-color: var(--red);   color: var(--red); }
+
+  .empty { padding: 16px 14px; color: var(--fg2); font-size: 12px; }
 </style>
