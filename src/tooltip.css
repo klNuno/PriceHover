@@ -75,19 +75,17 @@
 .ph-item {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 5px;
 }
 
 .ph-item-amount {
   font-weight: 600;
   color: var(--green);
-  flex: 1;
 }
 
 .ph-item-code {
   font-size: 11px;
   color: var(--fg2);
-  flex-shrink: 0;
 }
 
 .ph-empty {

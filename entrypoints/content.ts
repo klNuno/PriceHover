@@ -142,7 +142,9 @@ export default defineContentScript({
 
           L('detected price:', detected, 'on element:', target.tagName, target.textContent?.trim().slice(0, 30));
           const rect = target.getBoundingClientRect();
-          showTooltip(detected, rect.left + rect.width / 2, rect.top);
+          // X = cursor (naturally near the price text inside the element)
+          // Y = element top (anchored, doesn't jump when moving within element)
+          showTooltip(detected, e.clientX, rect.top);
         } catch (err) {
           E('onMouseOver error', err);
           hideTooltip();
