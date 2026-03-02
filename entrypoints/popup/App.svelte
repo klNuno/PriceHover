@@ -108,7 +108,9 @@
   }
 
   .popup {
-    width: 260px;
+    width: max-content;
+    min-width: 220px;
+    max-width: 340px;
     max-height: 480px;
     background: var(--bg);
     color: var(--fg);
@@ -142,6 +144,7 @@
   .search-wrap {
     padding: 8px 10px;
     border-bottom: 1px solid var(--border);
+    width: 100%;
   }
 
   .search {
@@ -171,9 +174,10 @@
   }
 
   .row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 38px 1fr 14px;
     align-items: center;
-    gap: 8px;
+    gap: 0 8px;
     padding: 7px 14px;
     cursor: pointer;
     user-select: none;
@@ -186,24 +190,19 @@
   .code {
     font-weight: 600;
     font-size: 12px;
-    width: 36px;
-    flex-shrink: 0;
   }
 
   .name {
-    flex: 1;
     color: var(--fg2);
     font-size: 12px;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .check {
     font-size: 11px;
     font-weight: 700;
     color: var(--accent);
-    flex-shrink: 0;
+    text-align: right;
   }
 
   .empty {
