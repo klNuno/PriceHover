@@ -1,5 +1,5 @@
 import { mount, unmount } from 'svelte';
-import { detectPrice, detectPriceFromText } from '../src/detector';
+import { detectPricesFromElement, detectPriceFromText } from '../src/detector';
 import { CURRENCY_BY_CODE } from '../src/currencies';
 import { STORAGE, DEFAULT_CURRENCIES } from '../src/types';
 import type { ConvertedPrice, DetectedPrice, ExchangeRates } from '../src/types';
@@ -113,18 +113,18 @@ export default defineContentScript({
         .filter((c): c is ConvertedPrice => c !== null);
     }
 
-    async function showTooltip(detected: DetectedPrice, x: number, y: number): Promise<void> {
-      L('showTooltip', detected, 'cacheAge:', Date.now() - cacheLoadedAt);
+    async function showTooltip(prices: DetectedPrice[], x: number, y: number): Promise<void> {
+      L('showTooltip', prices, 'cacheAge:', Date.now() - cacheLoadedAt);
       if (Date.now() - cacheLoadedAt > CACHE_TTL) await refreshCache();
       if (!cachedRates) { L('cachedRates still null, aborting tooltip'); return; }
 
-      const conversions = convertPrice(detected, cachedRates, cachedCurrencies);
-      L('conversions:', conversions.length);
+      const allConversions = prices.map(p => convertPrice(p, cachedRates!, cachedCurrencies));
+      L('conversions:', allConversions.map(c => c.length));
       hideTooltip();
 
       tooltipInstance = mount(Tooltip, {
         target: container,
-        props: { source: detected, conversions, x, y },
+        props: { sources: prices, allConversions, x, y },
       });
       L('tooltip mounted');
     }
@@ -154,20 +154,19 @@ export default defineContentScript({
         if (!target || target === host) return;
 
         try {
-          const detected = detectPrice(target);
-          if (!detected) { hideTooltip(); return; }
+          const prices = detectPricesFromElement(target);
+          if (!prices.length) { hideTooltip(); return; }
 
-          L('detected price:', detected, 'on element:', target.tagName, target.textContent?.trim().slice(0, 30));
+          L('detected price:', prices, 'on element:', target.tagName, target.textContent?.trim().slice(0, 30));
 
-          // Use Range to position tooltip above the exact price text.
-          // No cursor check — mouseover only fires on element entry, so a check
-          // would silently fail if the cursor entered from a non-price area.
-          if (detected.matchedText) {
-            const range = findPriceRange(target, detected.matchedText);
+          // Position tooltip above the first matched price text via Range API.
+          const first = prices[0];
+          if (first.matchedText) {
+            const range = findPriceRange(target, first.matchedText);
             if (range) {
               const rect = range.getBoundingClientRect();
               if (rect.width > 0) {
-                showTooltip(detected, rect.left + rect.width / 2, rect.top);
+                showTooltip(prices, rect.left + rect.width / 2, rect.top);
                 return;
               }
             }
@@ -175,7 +174,7 @@ export default defineContentScript({
 
           // Fallback: semantic detection or Range not found.
           const rect = target.getBoundingClientRect();
-          showTooltip(detected, rect.left + rect.width / 2, rect.top);
+          showTooltip(prices, rect.left + rect.width / 2, rect.top);
         } catch (err) {
           E('onMouseOver error', err);
           hideTooltip();
@@ -201,7 +200,7 @@ export default defineContentScript({
       L('detected from selection:', detected);
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
-      showTooltip(detected, rect.left + rect.width / 2, rect.top);
+      showTooltip([detected], rect.left + rect.width / 2, rect.top);
     }
 
     document.addEventListener('mouseover', onMouseOver, { passive: true });
