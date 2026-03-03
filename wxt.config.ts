@@ -10,7 +10,7 @@ export default defineConfig({
   manifest: {
     name: 'PriceHover',
     description: 'Converts prices on any webpage on hover',
-    version: '0.1.0',
+    version: '0.2.0',
     permissions: ['storage', 'alarms'],
     host_permissions: ['https://open.er-api.com/*', 'https://flagcdn.com/*'],
   },
