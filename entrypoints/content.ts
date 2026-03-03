@@ -131,6 +131,69 @@ export default defineContentScript({
       return null;
     }
 
+    // ── Multi-price hover state ──────────────────────────────────────────────
+
+    interface PriceHitbox {
+      price: DetectedPrice;
+      rects: DOMRect[];  // getClientRects() — one rect per line when text wraps
+    }
+
+    let activeElement: Element | null = null;
+    let priceHitboxes: PriceHitbox[] = [];
+    let activePriceIdx = -1;
+    let mmRafId: number | null = null;
+
+    function buildHitboxes(element: Element, prices: DetectedPrice[]): PriceHitbox[] {
+      const result: PriceHitbox[] = [];
+      for (const price of prices) {
+        if (!price.matchedText) continue;
+        const range = findPriceRange(element, price.matchedText);
+        if (!range) continue;
+        const rects = [...range.getClientRects()];
+        if (rects.length) result.push({ price, rects });
+      }
+      return result;
+    }
+
+    function hitTest(x: number, y: number): number {
+      for (let i = 0; i < priceHitboxes.length; i++) {
+        for (const rect of priceHitboxes[i].rects) {
+          // Small vertical padding (4px) for easier targeting on single-line text
+          if (x >= rect.left && x <= rect.right && y >= rect.top - 4 && y <= rect.bottom + 4) {
+            return i;
+          }
+        }
+      }
+      return -1;
+    }
+
+    function onMouseMove(e: MouseEvent): void {
+      if (mmRafId !== null) return;
+      mmRafId = requestAnimationFrame(() => {
+        mmRafId = null;
+        const idx = hitTest(e.clientX, e.clientY);
+        if (idx === activePriceIdx) return;
+        activePriceIdx = idx;
+        if (idx === -1) {
+          hideTooltip();
+        } else {
+          const { price, rects } = priceHitboxes[idx];
+          const r = rects[0];
+          showTooltip([price], r.left + r.width / 2, r.top);
+        }
+      });
+    }
+
+    function clearMultiHover(): void {
+      if (mmRafId !== null) { cancelAnimationFrame(mmRafId); mmRafId = null; }
+      document.removeEventListener('mousemove', onMouseMove);
+      activeElement = null;
+      priceHitboxes = [];
+      activePriceIdx = -1;
+    }
+
+    // ── Event handlers ───────────────────────────────────────────────────────
+
     function onMouseOver(e: MouseEvent): void {
       if (rafId !== null) cancelAnimationFrame(rafId);
 
@@ -139,29 +202,48 @@ export default defineContentScript({
         const target = e.target as Element | null;
         if (!target || target === host) return;
 
+        // Still inside the active multi-price element (entered a child) — let mousemove handle it
+        if (activeElement && (target === activeElement || activeElement.contains(target))) return;
+
+        // Left previous multi-price element
+        if (activeElement) clearMultiHover();
+
         try {
           const allPrices = detectPricesFromElement(target);
-          // Selected currencies are ones you already understand → suppress tooltip for them
           const prices = allPrices.filter(p => !cachedCurrencies.includes(p.currencyCode));
           if (!prices.length) { hideTooltip(); return; }
 
-
-          // Position tooltip above the first matched price text via Range API.
-          const first = prices[0];
-          if (first.matchedText) {
-            const range = findPriceRange(target, first.matchedText);
-            if (range) {
-              const rect = range.getBoundingClientRect();
-              if (rect.width > 0) {
-                showTooltip(prices, rect.left + rect.width / 2, rect.top);
-                return;
+          if (prices.length === 1) {
+            // Single price: show immediately, position above matched text
+            const first = prices[0];
+            if (first.matchedText) {
+              const range = findPriceRange(target, first.matchedText);
+              if (range) {
+                const rect = range.getBoundingClientRect();
+                if (rect.width > 0) {
+                  showTooltip(prices, rect.left + rect.width / 2, rect.top);
+                  return;
+                }
               }
             }
-          }
+            const rect = target.getBoundingClientRect();
+            showTooltip(prices, rect.left + rect.width / 2, rect.top);
 
-          // Fallback: semantic detection or Range not found.
-          const rect = target.getBoundingClientRect();
-          showTooltip(prices, rect.left + rect.width / 2, rect.top);
+          } else {
+            // Multiple prices: build hitboxes, track cursor via mousemove
+            activeElement = target;
+            priceHitboxes = buildHitboxes(target, prices);
+            document.addEventListener('mousemove', onMouseMove, { passive: true });
+
+            // Show the price under the cursor immediately (entry position)
+            const idx = hitTest(e.clientX, e.clientY);
+            if (idx !== -1) {
+              activePriceIdx = idx;
+              const { price, rects } = priceHitboxes[idx];
+              const r = rects[0];
+              showTooltip([price], r.left + r.width / 2, r.top);
+            }
+          }
         } catch (err) {
           E('onMouseOver error', err);
           hideTooltip();
@@ -169,8 +251,14 @@ export default defineContentScript({
       });
     }
 
-    function onMouseOut(): void {
+    function onMouseOut(e: MouseEvent): void {
       if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+
+      // If moving to a child of activeElement, mouseover will handle it — don't clear yet
+      const related = e.relatedTarget as Element | null;
+      if (activeElement && related && activeElement.contains(related)) return;
+
+      clearMultiHover();
       hideTooltip();
     }
 
@@ -197,6 +285,7 @@ export default defineContentScript({
       document.removeEventListener('mouseover', onMouseOver);
       document.removeEventListener('mouseout', onMouseOut);
       document.removeEventListener('selectionchange', onSelectionChange);
+      clearMultiHover();
       hideTooltip();
       host.remove();
     });
