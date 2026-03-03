@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ConvertedPrice, DetectedPrice } from './types';
   import { flagToCountryCode } from './currencies';
+  import { formatCurrencyAmount } from './formatter';
 
   interface Props {
     sources: DetectedPrice[];
@@ -11,18 +12,6 @@
   }
 
   let { sources, allConversions, x, y, yBottom }: Props = $props();
-
-  function formatAmount(amount: number, code: string): string {
-    try {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: code,
-        maximumFractionDigits: code === 'JPY' || code === 'KRW' ? 0 : 2,
-      }).format(amount);
-    } catch {
-      return `${amount.toFixed(2)} ${code}`;
-    }
-  }
 
   // Pivot allConversions (per-source arrays) into per-target-currency rows.
   const rows = $derived(() => {
@@ -70,7 +59,7 @@
 >
   <div class="ph-header">
     <span class="ph-source">
-      {sources.map(s => formatAmount(s.amount, s.currencyCode)).join(' · ')}
+      {sources.map(s => formatCurrencyAmount(s.amount, s.currencyCode)).join(' · ')}
     </span>
   </div>
 

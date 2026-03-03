@@ -3,6 +3,7 @@
   import { CURRENCIES, CURRENCY_BY_CODE, flagToCountryCode } from '../../src/currencies';
   import { STORAGE, DEFAULT_CURRENCIES } from '../../src/types';
   import { detectPriceFromText } from '../../src/detector';
+  import { formatCurrencyAmount } from '../../src/formatter';
 
   // Build alias map automatically from CURRENCIES names (first match wins = most common first).
   // Skips generic geographic words. Adds plurals and a few informal names.
@@ -111,15 +112,7 @@
       const currency = CURRENCY_BY_CODE.get(code);
       if (!targetRate || !currency) continue;
       const amount = parsed.amount * (targetRate / sourceRate);
-      try {
-        map.set(code, new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: code,
-          maximumFractionDigits: code === 'JPY' || code === 'KRW' ? 0 : 2,
-        }).format(amount));
-      } catch {
-        map.set(code, `${amount.toFixed(2)} ${code}`);
-      }
+      map.set(code, formatCurrencyAmount(amount, code));
     }
     return map;
   });
