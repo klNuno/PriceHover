@@ -1,75 +1,96 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { CURRENCIES, CURRENCY_BY_CODE } from '../../src/currencies';
+  import { CURRENCIES, CURRENCY_BY_CODE, flagToCountryCode } from '../../src/currencies';
   import { STORAGE, DEFAULT_CURRENCIES } from '../../src/types';
   import { detectPriceFromText } from '../../src/detector';
+
+  // Build alias map automatically from CURRENCIES names (first match wins = most common first).
+  // Skips generic geographic words. Adds plurals and a few informal names.
+  const CURRENCY_ALIASES = (() => {
+    const skip = new Set(['us', 'uk', 'new', 'south', 'north', 'east', 'west', 'hong',
+      'kong', 'saudi', 'united', 'arab', 'emirates', 'costa', 'rica', 'de', 'and']);
+    const map = new Map<string, string>();
+    for (const c of CURRENCIES) {
+      for (const word of c.name.toLowerCase().split(/\s+/)) {
+        if (word.length > 2 && !skip.has(word) && !map.has(word)) {
+          map.set(word, c.code);
+          if (!word.endsWith('s')) map.set(word + 's', c.code); // simple plural
+        }
+      }
+    }
+    // Informal names not derivable from official names
+    for (const [alias, code] of [
+      ['dol', 'USD'], ['buck', 'USD'], ['bucks', 'USD'],
+      ['rouble', 'RUB'], ['roubles', 'RUB'],
+      ['sterling', 'GBP'],
+      ['rmb', 'CNY'], ['renminbi', 'CNY'],
+      ['reais', 'BRL'],
+      ['hryvnia', 'UAH'], ['hry', 'UAH'],
+    ] as [string, string][]) {
+      if (!map.has(alias)) map.set(alias, code);
+    }
+    return map;
+  })();
+
+  function normalizeQuery(q: string): string {
+    const m = q.match(/^([\d,.]+)\s+([a-zÀ-ÿ]+)$|^([a-zÀ-ÿ]+)\s+([\d,.]+)$/i);
+    if (!m) return q;
+    const [amount, word] = m[1] ? [m[1], m[2]] : [m[4], m[3]];
+    const code = CURRENCY_ALIASES.get(word.toLowerCase());
+    return code ? `${amount} ${code}` : q;
+  }
 
   let selectedCodes = $state<string[]>(DEFAULT_CURRENCIES);
   let rates = $state<Record<string, number> | null>(null);
   let searchQuery = $state('');
 
-  async function storageSet(data: Record<string, unknown>): Promise<void> {
-    try { await chrome.storage.sync.set(data); } catch {}
-    try { await chrome.storage.local.set(data); } catch {}
+  let err = $state('');
+
+  function storageGet(keys: string[]): Promise<Record<string, unknown>> {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(keys, (r) => resolve(r ?? {}));
+    });
   }
 
-  async function storageGet(): Promise<Record<string, unknown>> {
-    const keys = [STORAGE.CURRENCIES];
-    try {
-      const r = await chrome.storage.sync.get(keys);
-      if (r[STORAGE.CURRENCIES] !== undefined) return r;
-    } catch {}
-    try { return await chrome.storage.local.get(keys); } catch {}
-    return {};
+  function storageSet(data: Record<string, unknown>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.set(data, () => {
+        if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+        else resolve();
+      });
+    });
   }
 
   onMount(async () => {
-    const result = await storageGet();
-    if (result[STORAGE.CURRENCIES]) selectedCodes = result[STORAGE.CURRENCIES] as string[];
     try {
-      const r = await chrome.runtime.sendMessage({ type: 'getRates' });
-      if (r?.rates) rates = r.rates;
-    } catch {}
+      const r = await storageGet([STORAGE.CURRENCIES, STORAGE.RATES]);
+      if (r[STORAGE.CURRENCIES]) selectedCodes = r[STORAGE.CURRENCIES] as string[];
+      if (r[STORAGE.RATES]) rates = r[STORAGE.RATES] as Record<string, number>;
+    } catch (e) { err = `load: ${e}`; }
   });
+
+  async function save(): Promise<void> {
+    try {
+      await storageSet({ [STORAGE.CURRENCIES]: [...selectedCodes] });
+    } catch (e) { err = `save: ${e}`; }
+  }
 
   async function toggleCurrency(code: string): Promise<void> {
     selectedCodes = selectedCodes.includes(code)
       ? selectedCodes.filter((c) => c !== code)
       : [...selectedCodes, code];
-    await storageSet({ [STORAGE.CURRENCIES]: selectedCodes });
+    await save();
   }
 
-  // --- Hybrid search / calculator ---
-
-  const parsed = $derived(detectPriceFromText(searchQuery.trim()));
-  const isCalcMode = $derived(parsed !== null && rates !== null);
-
-  const calcResults = $derived.by(() => {
-    if (!parsed || !rates) return [];
-    const sourceRate = rates[parsed.currencyCode];
-    if (!sourceRate) return [];
-    return selectedCodes
-      .filter(code => code !== parsed.currencyCode)
-      .flatMap(code => {
-        const targetRate = rates![code];
-        const currency = CURRENCY_BY_CODE.get(code);
-        if (!targetRate || !currency) return [];
-        const amount = parsed.amount * (targetRate / sourceRate);
-        let formatted: string;
-        try {
-          formatted = new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: code,
-            maximumFractionDigits: code === 'JPY' || code === 'KRW' ? 0 : 2,
-          }).format(amount);
-        } catch {
-          formatted = `${amount.toFixed(2)} ${code}`;
-        }
-        return [{ code, flag: currency.flag, formatted }];
-      });
+  // Detect if search is a price expression → calculator mode
+  const parsed = $derived.by(() => {
+    const q = searchQuery.trim();
+    return detectPriceFromText(q) ?? detectPriceFromText(normalizeQuery(q));
   });
+  const isCalcMode = $derived(parsed !== null);
 
-  const filteredCurrencies = $derived(
+  // Calc mode: all currencies. Search mode: filter by text. Default: all.
+  const visibleCurrencies = $derived(
     (!isCalcMode && searchQuery.trim())
       ? CURRENCIES.filter(c =>
           c.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -78,17 +99,30 @@
       : CURRENCIES
   );
 
-  function formatSource(amount: number, code: string): string {
-    try {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: code,
-        maximumFractionDigits: code === 'JPY' || code === 'KRW' ? 0 : 2,
-      }).format(amount);
-    } catch {
-      return `${amount.toFixed(2)} ${code}`;
+  // Precomputed conversion map: code → formatted string (all currencies in calc mode)
+  const conversionMap = $derived.by(() => {
+    const map = new Map<string, string>();
+    if (!parsed || !rates) return map;
+    const sourceRate = rates[parsed.currencyCode];
+    if (!sourceRate) return map;
+    for (const { code } of CURRENCIES) {
+      if (code === parsed.currencyCode) continue;
+      const targetRate = rates[code];
+      const currency = CURRENCY_BY_CODE.get(code);
+      if (!targetRate || !currency) continue;
+      const amount = parsed.amount * (targetRate / sourceRate);
+      try {
+        map.set(code, new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: code,
+          maximumFractionDigits: code === 'JPY' || code === 'KRW' ? 0 : 2,
+        }).format(amount));
+      } catch {
+        map.set(code, `${amount.toFixed(2)} ${code}`);
+      }
     }
-  }
+    return map;
+  });
 </script>
 
 <div class="popup">
@@ -106,46 +140,42 @@
     />
   </div>
 
-  {#if isCalcMode}
-    <div class="calc-source">
-      {formatSource(parsed!.amount, parsed!.currencyCode)}
-    </div>
-    {#if calcResults.length > 0}
-      <ul class="calc-list">
-        {#each calcResults as r (r.code)}
-          <li class="calc-item">
-            <span class="calc-flag">{r.flag}</span>
-            <span class="calc-code">{r.code}</span>
-            <span class="calc-amount">{r.formatted}</span>
-          </li>
-        {/each}
-      </ul>
-    {:else}
-      <p class="empty">No currencies selected</p>
+  <ul class="list">
+    {#each visibleCurrencies as currency (currency.code)}
+      {@const selected = selectedCodes.includes(currency.code)}
+      {@const converted = conversionMap.get(currency.code)}
+      <li>
+        <label class="row" class:selected={selected && !isCalcMode} class:has-value={!!converted}>
+          <input
+            type="checkbox"
+            class="sr-only"
+            checked={selected}
+            onchange={() => toggleCurrency(currency.code)}
+          />
+          <img class="flag" src="https://flagcdn.com/20x15/{flagToCountryCode(currency.flag)}.png" alt="" onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; (t.nextElementSibling as HTMLElement).style.display = 'inline'; }} /><span class="flag-fb" style="display:none">{currency.flag}</span>
+          <span class="code">{currency.code}</span>
+          <span class="name">{currency.name}</span>
+          <span class="right">
+            {#if isCalcMode}
+              {#if converted}
+                <span class="amount">{converted}</span>
+              {:else if !selected}
+                <!-- unselected in calc mode: nothing -->
+              {:else}
+                <span class="loading">…</span>
+              {/if}
+            {:else if selected}
+              <span class="check">✓</span>
+            {/if}
+          </span>
+        </label>
+      </li>
+    {/each}
+    {#if visibleCurrencies.length === 0}
+      <li class="empty">No results</li>
     {/if}
-  {:else}
-    <ul class="list">
-      {#each filteredCurrencies as currency (currency.code)}
-        {@const selected = selectedCodes.includes(currency.code)}
-        <li>
-          <label class="row" class:selected>
-            <input
-              type="checkbox"
-              class="sr-only"
-              checked={selected}
-              onchange={() => toggleCurrency(currency.code)}
-            />
-            <span class="code">{currency.code}</span>
-            <span class="name">{currency.name}</span>
-            {#if selected}<span class="check">✓</span>{/if}
-          </label>
-        </li>
-      {/each}
-      {#if filteredCurrencies.length === 0}
-        <li class="empty">No results</li>
-      {/if}
-    </ul>
-  {/if}
+  </ul>
+  {#if err}<div class="err">{err}</div>{/if}
 </div>
 
 <style>
@@ -161,7 +191,6 @@
     --border: #e0e0e0;
     --green: #1a8c2a;
   }
-
   @media (prefers-color-scheme: dark) {
     :global(:root) {
       --bg: #111111;
@@ -176,10 +205,8 @@
   }
 
   .popup {
-    width: max-content;
-    min-width: 220px;
-    max-width: 340px;
-    max-height: 480px;
+    width: 320px;
+    max-height: 380px;
     background: var(--bg);
     color: var(--fg);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -193,15 +220,17 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 14px 10px;
+    padding: 10px 14px 9px;
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
   }
-  .title { font-weight: 700; font-size: 13px; letter-spacing: 0.03em; text-transform: uppercase; }
+  .title { font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; }
   .count { font-size: 11px; color: var(--fg2); }
 
   .search-wrap {
-    padding: 8px 10px;
+    padding: 7px 10px;
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
   }
   .search {
     width: 100%;
@@ -217,36 +246,6 @@
   .search::placeholder { color: var(--fg2); }
   .search::-webkit-search-cancel-button { -webkit-appearance: none; }
 
-  /* --- Calculator mode --- */
-  .calc-source {
-    padding: 10px 14px 8px;
-    font-size: 15px;
-    font-weight: 700;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .calc-list {
-    flex: 1;
-    overflow-y: auto;
-    list-style: none;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
-
-  .calc-item {
-    display: grid;
-    grid-template-columns: 20px 38px 1fr;
-    align-items: center;
-    gap: 0 8px;
-    padding: 6px 14px;
-  }
-  .calc-item:hover { background: var(--bg2); }
-
-  .calc-flag { font-size: 13px; }
-  .calc-code { font-size: 12px; font-weight: 600; }
-  .calc-amount { font-size: 12px; color: var(--green); font-weight: 600; text-align: right; }
-
-  /* --- Currency list mode --- */
   .list {
     flex: 1;
     overflow-y: auto;
@@ -257,30 +256,35 @@
 
   .row {
     display: grid;
-    grid-template-columns: 38px 1fr 14px;
+    grid-template-columns: 22px 38px 1fr auto;
     align-items: center;
     gap: 0 8px;
-    padding: 7px 14px;
+    padding: 6px 14px;
     cursor: pointer;
     user-select: none;
     transition: background 0.08s;
   }
   .row:hover { background: var(--bg2); }
   .row.selected { background: var(--bg3); }
+  .row.has-value { background: var(--bg2); }
 
+  .flag { width: 20px; height: 15px; object-fit: cover; border-radius: 2px; flex-shrink: 0; }
+  .flag-fb { font-size: 14px; line-height: 1; }
   .code { font-weight: 600; font-size: 12px; }
-  .name { color: var(--fg2); font-size: 12px; white-space: nowrap; }
-  .check { font-size: 11px; font-weight: 700; color: var(--accent); text-align: right; }
+  .name { color: var(--fg2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  .empty { padding: 16px 14px; color: var(--fg2); font-size: 12px; }
+  .right { text-align: right; min-width: 0; }
+  .check { font-size: 11px; font-weight: 700; color: var(--accent); }
+  .amount { font-size: 12px; font-weight: 600; color: var(--green); white-space: nowrap; }
+  .loading { font-size: 11px; color: var(--fg2); }
+
+  .empty { padding: 14px; color: var(--fg2); font-size: 12px; }
+  .err { padding: 4px 14px; font-size: 10px; color: #c0392b; border-top: 1px solid var(--border); font-family: monospace; }
+
 
   .sr-only {
-    position: absolute;
-    width: 1px; height: 1px;
-    padding: 0; margin: -1px;
-    overflow: hidden;
-    clip: rect(0,0,0,0);
-    white-space: nowrap;
-    border: 0;
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0,0,0,0); white-space: nowrap; border: 0;
   }
 </style>

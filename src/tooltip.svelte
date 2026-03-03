@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ConvertedPrice, DetectedPrice } from './types';
+  import { flagToCountryCode } from './currencies';
 
   interface Props {
     sources: DetectedPrice[];
@@ -54,6 +55,12 @@
     <ul class="ph-list">
       {#each rows() as row (row.code)}
         <li class="ph-item">
+          <img
+            class="ph-flag"
+            src="https://flagcdn.com/20x15/{flagToCountryCode(row.flag)}.png"
+            alt=""
+            onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; (t.nextElementSibling as HTMLElement).style.display = ''; }}
+          /><span class="ph-flag-fb" style="display:none">{row.flag}</span>
           <span class="ph-item-code">{row.code}</span>
           {#each row.amounts as amt}
             <span class="ph-item-amount">{amt}</span>
