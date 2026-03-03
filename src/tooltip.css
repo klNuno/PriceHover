@@ -45,6 +45,11 @@
   to   { opacity: 1; transform: translate(-50%, calc(-100% - 8px)); }
 }
 
+@keyframes ph-in-below {
+  from { opacity: 0; transform: translate(-50%, 4px); }
+  to   { opacity: 1; transform: translate(-50%, 8px); }
+}
+
 .ph-header {
   display: flex;
   align-items: center;
@@ -53,8 +58,8 @@
 }
 
 .ph-source {
-  font-weight: 700;
-  font-size: 13px;
+  font-size: 11px;
+  color: var(--fg2);
 }
 
 .ph-divider {
@@ -93,7 +98,8 @@
 }
 
 .ph-item-amount {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 13px;
   color: var(--green);
 }
 
