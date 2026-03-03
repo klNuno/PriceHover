@@ -20,14 +20,6 @@ export default defineConfig({
       48: 'icons/icon-48.png',
       128: 'icons/icon-128.png',
     },
-    action: {
-      default_title: 'PriceHover',
-      default_popup: 'popup.html',
-      default_icon: {
-        16: 'icons/icon-16.png',
-        32: 'icons/icon-32.png',
-      },
-    },
     ...(browser === 'firefox' && {
       browser_specific_settings: {
         gecko: { id: 'pricehover@klnuno', strict_min_version: '109.0' },
