@@ -7,12 +7,12 @@ const SYM =
   'COL\\$|CLP\\$|CDN\\$|NT\\$|Mex\\$|MX\\$|CA\\$|HK\\$|NZ\\$|A\\$|R\\$|S\\$|' +
   // Other multi-char symbols
   'S/\\.|\\$U|' +                               // PEN (S/.), UYU ($U)
-  'Rp|RM|SR|QR|KD|kr|zł|R|' +                  // IDR, MYR, SAR, QAR, KWD, SEK/NOK/DKK, PLN, ZAR
+  'Rp|RM|SR|QR|KD|Fr|kr|zł|R|' +               // IDR, MYR, SAR, QAR, KWD, CHF, SEK/NOK/DKK(ambig), PLN, ZAR
   // ISO 4217 codes
   'USD|EUR|GBP|JPY|CAD|AUD|CHF|CNY|INR|KRW|' +
   'BRL|MXN|SGD|HKD|NOK|SEK|DKK|PLN|CZK|HUF|' +
   'RUB|TRY|ZAR|AED|SAR|NZD|THB|IDR|MYR|PHP|' +
-  'UAH|VND|KZT|ILS|CRC|UYU|PEN|KWD|QAR|TWD|' +
+  'UAH|VND|KZT|ILS|CRC|UYU|PEN|KWD|QAR|TWD|NGN|' +
   // Single-char symbols
   '[$€£¥￥₹₩₦₱฿₺₽₴₫₸₪₡]';
 
@@ -31,7 +31,7 @@ const ISO_CODES = new Set([
   'USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'INR', 'KRW',
   'BRL', 'MXN', 'SGD', 'HKD', 'NOK', 'SEK', 'DKK', 'PLN', 'CZK', 'HUF',
   'RUB', 'TRY', 'ZAR', 'AED', 'SAR', 'NZD', 'THB', 'IDR', 'MYR', 'PHP',
-  'UAH', 'VND', 'KZT', 'ILS', 'CRC', 'UYU', 'PEN', 'KWD', 'QAR', 'TWD',
+  'UAH', 'VND', 'KZT', 'ILS', 'CRC', 'UYU', 'PEN', 'KWD', 'QAR', 'TWD', 'NGN',
 ]);
 
 function normalizeAmount(raw: string): number {
@@ -154,8 +154,12 @@ export function detectPricesFromElement(element: Element): DetectedPrice[] {
     const semantic = trySemanticDetection(element);
     if (semantic) return [semantic];
 
-    const text = element.childElementCount === 0
-      ? (element.textContent ?? '').trim()
+    const fullText = (element.textContent ?? '').trim();
+    // Non-leaf elements with short content are likely price containers (Steam, Amazon…)
+    // — use full textContent so nested prices are found, hitboxes handle precision.
+    // Long elements use directTextContent to avoid matching entire paragraphs.
+    const text = element.childElementCount === 0 || fullText.length <= 150
+      ? fullText
       : directTextContent(element);
 
     if (!text) return [];
@@ -163,11 +167,6 @@ export function detectPricesFromElement(element: Element): DetectedPrice[] {
   } catch {
     return [];
   }
-}
-
-// Kept for selection-based detection (single match is sufficient there)
-export function detectPrice(element: Element): DetectedPrice | null {
-  return detectPricesFromElement(element)[0] ?? null;
 }
 
 export function detectPriceFromText(text: string): DetectedPrice | null {
