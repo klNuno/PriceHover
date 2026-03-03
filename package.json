@@ -5,7 +5,6 @@
   "private": true,
   "scripts": {
     "dev": "wxt",
-    "dev:firefox": "wxt --browser firefox",
     "build": "wxt build",
     "build:firefox": "wxt build --browser firefox",
     "zip": "wxt zip",
