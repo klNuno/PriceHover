@@ -12,6 +12,6 @@ export default defineConfig({
     description: 'Converts prices on any webpage on hover',
     version: '0.1.0',
     permissions: ['storage', 'alarms'],
-    host_permissions: ['https://open.er-api.com/*'],
+    host_permissions: ['https://open.er-api.com/*', 'https://flagcdn.com/*'],
   },
 });

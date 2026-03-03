@@ -6,7 +6,6 @@ import type { ConvertedPrice, DetectedPrice, ExchangeRates } from '../src/types'
 import Tooltip from '../src/tooltip.svelte';
 import tooltipStyles from '../src/tooltip.css?inline';
 
-const L = (msg: string, ...args: unknown[]) => console.log(`[PH] ${msg}`, ...args);
 const E = (msg: string, err: unknown) => console.error(`[PH] ${msg}`, err);
 
 export default defineContentScript({
@@ -14,9 +13,7 @@ export default defineContentScript({
   runAt: 'document_idle',
 
   main() {
-    L('content script start');
-
-    if (!document.body) { L('no document.body, aborting'); return; }
+    if (!document.body) return;
 
     // Shadow DOM host
     const host = document.createElement('div');
@@ -24,7 +21,6 @@ export default defineContentScript({
     host.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:2147483647;';
     const shadow = host.attachShadow({ mode: 'closed' });
     document.body.appendChild(host);
-    L('shadow DOM created');
 
     const style = document.createElement('style');
     style.textContent = tooltipStyles;
@@ -42,37 +38,25 @@ export default defineContentScript({
     const CACHE_TTL = 10_000;
 
     async function refreshCache(): Promise<void> {
-      L('refreshCache start');
       try {
         const ratesResponse = await chrome.runtime.sendMessage({ type: 'getRates' });
-        L('getRates response:', ratesResponse);
-        if (ratesResponse?.rates) {
-          cachedRates = ratesResponse.rates;
-          L('rates loaded, keys sample:', Object.keys(cachedRates!).slice(0, 5));
-        } else {
-          L('getRates response had no rates');
-        }
+        if (ratesResponse?.rates) cachedRates = ratesResponse.rates;
       } catch (err) {
         E('sendMessage getRates failed', err);
       }
 
-      // storage.sync requires a permanent addon ID in Firefox — fall back to local.
-      // Try sync first; if empty, check local (mirrors popup storageGet logic).
       try {
-        const key = STORAGE.CURRENCIES;
-        let store = await chrome.storage.sync.get(key)
-          .catch(() => chrome.storage.local.get(key));
-        if (!store[key]) {
-          store = await chrome.storage.local.get(key).catch(() => ({}));
-        }
-        L('currencies storage:', store);
-        if (store[key]) cachedCurrencies = store[key] as string[];
+        await new Promise<void>((resolve) => {
+          chrome.storage.local.get([STORAGE.CURRENCIES], (r) => {
+            if (r?.[STORAGE.CURRENCIES]) cachedCurrencies = r[STORAGE.CURRENCIES] as string[];
+            resolve();
+          });
+        });
       } catch (err) {
         E('storage currencies get failed', err);
       }
 
       cacheLoadedAt = Date.now();
-      L('refreshCache done — cachedRates null?', cachedRates === null, 'currencies:', cachedCurrencies);
     }
 
     refreshCache();
@@ -90,7 +74,7 @@ export default defineContentScript({
       targetCodes: string[]
     ): ConvertedPrice[] {
       const sourceRate = rates[detected.currencyCode];
-      if (!sourceRate) { L('no source rate for', detected.currencyCode); return []; }
+      if (!sourceRate) return [];
 
       return targetCodes
         .filter((code) => code !== detected.currencyCode)
@@ -119,19 +103,16 @@ export default defineContentScript({
     }
 
     async function showTooltip(prices: DetectedPrice[], x: number, y: number): Promise<void> {
-      L('showTooltip', prices, 'cacheAge:', Date.now() - cacheLoadedAt);
       if (Date.now() - cacheLoadedAt > CACHE_TTL) await refreshCache();
-      if (!cachedRates) { L('cachedRates still null, aborting tooltip'); return; }
+      if (!cachedRates) return;
 
       const allConversions = prices.map(p => convertPrice(p, cachedRates!, cachedCurrencies));
-      L('conversions:', allConversions.map(c => c.length));
       hideTooltip();
 
       tooltipInstance = mount(Tooltip, {
         target: container,
         props: { sources: prices, allConversions, x, y },
       });
-      L('tooltip mounted');
     }
 
     function findPriceRange(element: Element, matchedText: string): Range | null {
@@ -164,7 +145,6 @@ export default defineContentScript({
           const prices = allPrices.filter(p => !cachedCurrencies.includes(p.currencyCode));
           if (!prices.length) { hideTooltip(); return; }
 
-          L('detected price:', prices, 'on element:', target.tagName, target.textContent?.trim().slice(0, 30));
 
           // Position tooltip above the first matched price text via Range API.
           const first = prices[0];
@@ -204,7 +184,6 @@ export default defineContentScript({
       const detected = detectPriceFromText(text);
       if (!detected || cachedCurrencies.includes(detected.currencyCode)) { hideTooltip(); return; }
 
-      L('detected from selection:', detected);
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       showTooltip([detected], rect.left + rect.width / 2, rect.top);
@@ -213,7 +192,6 @@ export default defineContentScript({
     document.addEventListener('mouseover', onMouseOver, { passive: true });
     document.addEventListener('mouseout', onMouseOut, { passive: true });
     document.addEventListener('selectionchange', onSelectionChange, { passive: true });
-    L('event listeners registered');
 
     window.addEventListener('unload', () => {
       document.removeEventListener('mouseover', onMouseOver);

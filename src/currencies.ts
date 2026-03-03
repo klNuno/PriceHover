@@ -46,6 +46,14 @@ export const CURRENCIES: Currency[] = [
 
 export const CURRENCY_BY_CODE = new Map(CURRENCIES.map((c) => [c.code, c]));
 
+// Extract 2-letter country code from a flag emoji (Regional Indicator Symbol pair)
+// e.g. '🇺🇸' → 'us', '🇪🇺' → 'eu'
+export function flagToCountryCode(flag: string): string {
+  return [...flag].slice(0, 2)
+    .map(c => String.fromCharCode(c.codePointAt(0)! - 0x1F1A5).toLowerCase())
+    .join('');
+}
+
 // Symbol to currency code mapping (for regex detection)
 export const SYMBOL_TO_CODE: Record<string, string> = {
   '$': 'USD',

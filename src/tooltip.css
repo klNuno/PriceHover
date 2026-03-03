@@ -74,9 +74,22 @@
 
 .ph-item {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 5px;
   flex-wrap: wrap;
+}
+
+.ph-flag {
+  width: 16px;
+  height: 12px;
+  object-fit: cover;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.ph-flag-fb {
+  font-size: 12px;
+  line-height: 1;
 }
 
 .ph-item-amount {
