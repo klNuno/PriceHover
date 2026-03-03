@@ -95,7 +95,10 @@ export const SYMBOL_TO_CODE: Record<string, string> = {
   'R': 'ZAR',
   'zł': 'PLN',
   'ZŁ': 'PLN',
-  'kr': 'SEK', // ambiguous (NOK/SEK/DKK) — default SEK
+  // 'kr' is ambiguous: used by NOK (Norway), SEK (Sweden), DKK (Denmark) and ISK (Iceland).
+  // We default to SEK (most commonly seen on international e-commerce).
+  // Accurate detection would require knowing the page's locale/TLD, which is out of scope.
+  'kr': 'SEK',
   'KR': 'SEK',
   'SR': 'SAR',
   'QR': 'QAR',
