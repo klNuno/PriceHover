@@ -213,36 +213,18 @@ export default defineContentScript({
           const prices = allPrices.filter(p => !cachedCurrencies.includes(p.currencyCode));
           if (!prices.length) { hideTooltip(); return; }
 
-          if (prices.length === 1) {
-            // Single price: show immediately, position above matched text
-            const first = prices[0];
-            if (first.matchedText) {
-              const range = findPriceRange(target, first.matchedText);
-              if (range) {
-                const rect = range.getBoundingClientRect();
-                if (rect.width > 0) {
-                  showTooltip(prices, rect.left + rect.width / 2, rect.top);
-                  return;
-                }
-              }
-            }
-            const rect = target.getBoundingClientRect();
-            showTooltip(prices, rect.left + rect.width / 2, rect.top);
+          // Always use hitbox approach: tooltip shows only when cursor is over price text
+          activeElement = target;
+          priceHitboxes = buildHitboxes(target, prices);
+          document.addEventListener('mousemove', onMouseMove, { passive: true });
 
-          } else {
-            // Multiple prices: build hitboxes, track cursor via mousemove
-            activeElement = target;
-            priceHitboxes = buildHitboxes(target, prices);
-            document.addEventListener('mousemove', onMouseMove, { passive: true });
-
-            // Show the price under the cursor immediately (entry position)
-            const idx = hitTest(e.clientX, e.clientY);
-            if (idx !== -1) {
-              activePriceIdx = idx;
-              const { price, rects } = priceHitboxes[idx];
-              const r = rects[0];
-              showTooltip([price], r.left + r.width / 2, r.top);
-            }
+          // Show immediately if cursor is already over a price (entry position)
+          const idx = hitTest(e.clientX, e.clientY);
+          if (idx !== -1) {
+            activePriceIdx = idx;
+            const { price, rects } = priceHitboxes[idx];
+            const r = rects[0];
+            showTooltip([price], r.left + r.width / 2, r.top);
           }
         } catch (err) {
           E('onMouseOver error', err);

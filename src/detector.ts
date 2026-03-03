@@ -4,7 +4,7 @@ import { SYMBOL_TO_CODE } from './currencies';
 // Multi-char symbols must come BEFORE single-char to win in alternation.
 const SYM =
   // Multi-char dollar variants (longest first)
-  'COL\\$|CLP\\$|MX\\$|CA\\$|HK\\$|NZ\\$|A\\$|R\\$|S\\$|' +
+  'COL\\$|CLP\\$|CDN\\$|NT\\$|Mex\\$|MX\\$|CA\\$|HK\\$|NZ\\$|A\\$|R\\$|S\\$|' +
   // Other multi-char symbols
   'S/\\.|\\$U|' +                               // PEN (S/.), UYU ($U)
   'Rp|RM|SR|QR|KD|kr|zł|R|' +                  // IDR, MYR, SAR, QAR, KWD, SEK/NOK/DKK, PLN, ZAR
@@ -12,7 +12,7 @@ const SYM =
   'USD|EUR|GBP|JPY|CAD|AUD|CHF|CNY|INR|KRW|' +
   'BRL|MXN|SGD|HKD|NOK|SEK|DKK|PLN|CZK|HUF|' +
   'RUB|TRY|ZAR|AED|SAR|NZD|THB|IDR|MYR|PHP|' +
-  'UAH|VND|KZT|ILS|CRC|UYU|PEN|KWD|QAR|' +
+  'UAH|VND|KZT|ILS|CRC|UYU|PEN|KWD|QAR|TWD|' +
   // Single-char symbols
   '[$€£¥₹₩₦₱฿₺₽₴₫₸₪₡]';
 
@@ -31,7 +31,7 @@ const ISO_CODES = new Set([
   'USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'INR', 'KRW',
   'BRL', 'MXN', 'SGD', 'HKD', 'NOK', 'SEK', 'DKK', 'PLN', 'CZK', 'HUF',
   'RUB', 'TRY', 'ZAR', 'AED', 'SAR', 'NZD', 'THB', 'IDR', 'MYR', 'PHP',
-  'UAH', 'VND', 'KZT', 'ILS', 'CRC', 'UYU', 'PEN', 'KWD', 'QAR',
+  'UAH', 'VND', 'KZT', 'ILS', 'CRC', 'UYU', 'PEN', 'KWD', 'QAR', 'TWD',
 ]);
 
 function normalizeAmount(raw: string): number {
