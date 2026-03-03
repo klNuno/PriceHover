@@ -2,11 +2,9 @@
 
 .ph-card {
   --bg: #111111;
-  --bg2: #1c1c1c;
   --border: #2a2a2a;
   --fg: #f0f0f0;
   --fg2: #888888;
-  --accent: #ffffff;
   --green: #5fcc6f;
 
   position: fixed;
@@ -30,11 +28,9 @@
 @media (prefers-color-scheme: light) {
   .ph-card {
     --bg: #ffffff;
-    --bg2: #f5f5f5;
     --border: #e0e0e0;
     --fg: #111111;
     --fg2: #666666;
-    --accent: #000000;
     --green: #1a8c2a;
     box-shadow: 0 4px 16px rgba(0,0,0,0.12);
   }
