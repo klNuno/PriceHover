@@ -61,6 +61,7 @@ export const SYMBOL_TO_CODE: Record<string, string> = {
   '€': 'EUR',
   '£': 'GBP',
   '¥': 'JPY',
+  '￥': 'JPY',
   '₹': 'INR',
   '₩': 'KRW',
   '₦': 'NGN',
