@@ -4,7 +4,7 @@
 
 Hover over any price on any webpage and instantly see it converted to your currencies.
 
-![PriceHover](public/banner.png)
+![PriceHover](docs/banner.png)
 
 </div>
 
