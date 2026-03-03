@@ -1,6 +1,12 @@
+<div align="center">
+
+# PriceHover
+
+Hover over any price on any webpage and instantly see it converted to your currencies.
+
 ![PriceHover](public/banner.png)
 
-Hover over any price on any webpage — instantly see it converted to your currencies.
+</div>
 
 ## Install
 
