@@ -199,13 +199,19 @@ export default defineContentScript({
         if (activeElement) clearMultiHover();
 
         try {
-          const allPrices = detectPricesFromElement(target);
+          // Try target first, then parent once — handles split DOM like <span>¥</span><span>348</span>
+          let priceEl: Element = target;
+          let allPrices = detectPricesFromElement(target);
+          if (!allPrices.length && target.parentElement && target.parentElement !== host) {
+            const parentPrices = detectPricesFromElement(target.parentElement);
+            if (parentPrices.length) { allPrices = parentPrices; priceEl = target.parentElement; }
+          }
           const prices = allPrices.filter(p => !cachedCurrencies.includes(p.currencyCode));
           if (!prices.length) { hideTooltip(); return; }
 
           // Always use hitbox approach: tooltip shows only when cursor is over price text
-          activeElement = target;
-          priceHitboxes = buildHitboxes(target, prices);
+          activeElement = priceEl;
+          priceHitboxes = buildHitboxes(priceEl, prices);
           document.addEventListener('mousemove', onMouseMove, { passive: true });
 
           // Show immediately if cursor is already over a price (entry position)
