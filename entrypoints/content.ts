@@ -102,7 +102,7 @@ export default defineContentScript({
         .filter((c): c is ConvertedPrice => c !== null);
     }
 
-    async function showTooltip(prices: DetectedPrice[], x: number, y: number): Promise<void> {
+    async function showTooltip(prices: DetectedPrice[], x: number, y: number, yBottom: number): Promise<void> {
       if (Date.now() - cacheLoadedAt > CACHE_TTL) await refreshCache();
       if (!cachedRates) return;
 
@@ -111,7 +111,7 @@ export default defineContentScript({
 
       tooltipInstance = mount(Tooltip, {
         target: container,
-        props: { sources: prices, allConversions, x, y },
+        props: { sources: prices, allConversions, x, y, yBottom },
       });
     }
 
@@ -179,7 +179,7 @@ export default defineContentScript({
         } else {
           const { price, rects } = priceHitboxes[idx];
           const r = rects[0];
-          showTooltip([price], r.left + r.width / 2, r.top);
+          showTooltip([price], r.left + r.width / 2, r.top, r.bottom);
         }
       });
     }
@@ -224,7 +224,7 @@ export default defineContentScript({
             activePriceIdx = idx;
             const { price, rects } = priceHitboxes[idx];
             const r = rects[0];
-            showTooltip([price], r.left + r.width / 2, r.top);
+            showTooltip([price], r.left + r.width / 2, r.top, r.bottom);
           }
         } catch (err) {
           E('onMouseOver error', err);
@@ -256,7 +256,7 @@ export default defineContentScript({
 
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
-      showTooltip([detected], rect.left + rect.width / 2, rect.top);
+      showTooltip([detected], rect.left + rect.width / 2, rect.top, rect.bottom);
     }
 
     document.addEventListener('mouseover', onMouseOver, { passive: true });
