@@ -3,6 +3,7 @@ import { detectPricesFromElement, detectPriceFromText } from '../src/detector';
 import { CURRENCY_BY_CODE } from '../src/currencies';
 import { STORAGE, DEFAULT_CURRENCIES } from '../src/types';
 import type { ConvertedPrice, DetectedPrice, ExchangeRates } from '../src/types';
+import { formatCurrencyAmount } from '../src/formatter';
 import Tooltip from '../src/tooltip.svelte';
 import tooltipStyles from '../src/tooltip.css?inline';
 
@@ -36,27 +37,22 @@ export default defineContentScript({
     let cachedCurrencies: string[] = DEFAULT_CURRENCIES;
     let cacheLoadedAt = 0;
     const CACHE_TTL = 10_000;
+    let refreshPromise: Promise<void> | null = null;
 
-    async function refreshCache(): Promise<void> {
-      try {
-        const ratesResponse = await chrome.runtime.sendMessage({ type: 'getRates' });
-        if (ratesResponse?.rates) cachedRates = ratesResponse.rates;
-      } catch (err) {
-        E('sendMessage getRates failed', err);
-      }
-
-      try {
-        await new Promise<void>((resolve) => {
-          chrome.storage.local.get([STORAGE.CURRENCIES], (r) => {
+    function refreshCache(): Promise<void> {
+      if (!refreshPromise) {
+        refreshPromise = (async () => {
+          try {
+            const r = await chrome.storage.local.get([STORAGE.RATES, STORAGE.CURRENCIES]);
+            if (r?.[STORAGE.RATES]) cachedRates = r[STORAGE.RATES] as ExchangeRates;
             if (r?.[STORAGE.CURRENCIES]) cachedCurrencies = r[STORAGE.CURRENCIES] as string[];
-            resolve();
-          });
-        });
-      } catch (err) {
-        E('storage currencies get failed', err);
+          } catch (err) {
+            E('storage get failed', err);
+          }
+          cacheLoadedAt = Date.now();
+        })().finally(() => { refreshPromise = null; });
       }
-
-      cacheLoadedAt = Date.now();
+      return refreshPromise;
     }
 
     refreshCache();
@@ -86,24 +82,18 @@ export default defineContentScript({
           const currency = CURRENCY_BY_CODE.get(code);
           if (!currency) return null;
 
-          let formatted: string;
-          try {
-            formatted = new Intl.NumberFormat('en-US', {
-              style: 'currency',
-              currency: code,
-              maximumFractionDigits: code === 'JPY' || code === 'KRW' ? 0 : 2,
-            }).format(amount);
-          } catch {
-            formatted = `${amount.toFixed(2)} ${code}`;
-          }
-
+          const formatted = formatCurrencyAmount(amount, code);
           return { currency, amount, formatted } satisfies ConvertedPrice;
         })
         .filter((c): c is ConvertedPrice => c !== null);
     }
 
+    let showGen = 0;
+
     async function showTooltip(prices: DetectedPrice[], x: number, y: number, yBottom: number): Promise<void> {
+      const gen = ++showGen;
       if (Date.now() - cacheLoadedAt > CACHE_TTL) await refreshCache();
+      if (gen !== showGen) return; // superseded by a newer call
       if (!cachedRates) return;
 
       const allConversions = prices.map(p => convertPrice(p, cachedRates!, cachedCurrencies));

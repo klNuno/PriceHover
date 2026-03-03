@@ -46,15 +46,4 @@ export default defineBackground(() => {
     if (name === ALARM_NAME) refreshRates();
   });
 
-  // Content scripts ask for rates via message passing.
-  // Use callback style — chrome.storage.local.get() doesn't return a Promise
-  // in Firefox MV2 message handlers (returns undefined instead).
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message.type === 'getRates') {
-      chrome.storage.local.get([STORAGE.RATES], (result) => {
-        sendResponse({ rates: result?.[STORAGE.RATES] ?? null });
-      });
-      return true; // keep channel open for async response
-    }
-  });
 });
