@@ -14,7 +14,7 @@ const SYM =
   'RUB|TRY|ZAR|AED|SAR|NZD|THB|IDR|MYR|PHP|' +
   'UAH|VND|KZT|ILS|CRC|UYU|PEN|KWD|QAR|TWD|' +
   // Single-char symbols
-  '[$€£¥₹₩₦₱฿₺₽₴₫₸₪₡]';
+  '[$€£¥￥₹₩₦₱฿₺₽₴₫₸₪₡]';
 
 // Two alternatives:
 // 1. Formatted with separators: 1,234.56 / 1.234,56 / 1 234,56
