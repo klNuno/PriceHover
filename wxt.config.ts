@@ -26,7 +26,7 @@ export default defineConfig({
           id: 'pricehover@klnuno',
           strict_min_version: '109.0',
           data_collection_permissions: {
-            required: [],
+            required: ['none'],
             optional: [],
           },
         },
