@@ -11,7 +11,7 @@ export default defineConfig({
   manifest: ({ browser }) => ({
     name: 'PriceHover',
     description: 'Converts prices on any webpage on hover',
-    version: '1.0.1',
+    version: '1.0.2',
     permissions: ['storage', 'alarms'],
     host_permissions: ['https://open.er-api.com/*', 'https://flagcdn.com/*'],
     icons: {
@@ -22,7 +22,14 @@ export default defineConfig({
     },
     ...(browser === 'firefox' && {
       browser_specific_settings: {
-        gecko: { id: 'pricehover@klnuno', strict_min_version: '109.0' },
+        gecko: {
+          id: 'pricehover@klnuno',
+          strict_min_version: '109.0',
+          data_collection_permissions: {
+            required: [],
+            optional: [],
+          },
+        },
       },
     }),
   }),
