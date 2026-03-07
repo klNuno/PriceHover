@@ -34,6 +34,7 @@ const ISO_CODES = new Set([
   'RUB', 'TRY', 'ZAR', 'AED', 'SAR', 'NZD', 'THB', 'IDR', 'MYR', 'PHP',
   'UAH', 'VND', 'KZT', 'ILS', 'CRC', 'UYU', 'PEN', 'KWD', 'QAR', 'TWD', 'NGN',
 ]);
+const LETTER_REGEX = /\p{L}/u;
 
 function normalizeAmount(raw: string): number {
   let s = raw.replace(/\s/g, '');
@@ -64,6 +65,21 @@ function symbolToCode(symbol: string): string | null {
   const upper = symbol.toUpperCase();
   if (ISO_CODES.has(upper)) return upper;
   return SYMBOL_TO_CODE[symbol] ?? SYMBOL_TO_CODE[upper] ?? null;
+}
+
+function isTokenBoundarySafe(input: string, token: string, matchIndex: number, matchedText: string): boolean {
+  if (/[\r\n]/.test(matchedText)) return false;
+  if (!LETTER_REGEX.test(token)) return true;
+
+  const tokenOffset = matchedText.indexOf(token);
+  if (tokenOffset === -1) return false;
+
+  const tokenStart = matchIndex + tokenOffset;
+  const tokenEnd = tokenStart + token.length;
+  const previous = tokenStart > 0 ? input[tokenStart - 1] : '';
+  const next = tokenEnd < input.length ? input[tokenEnd] : '';
+
+  return !LETTER_REGEX.test(previous) && !LETTER_REGEX.test(next);
 }
 
 function trySemanticDetection(element: Element): DetectedPrice | null {
@@ -113,6 +129,7 @@ function parseMatch(match: RegExpExecArray, textSource?: 'full' | 'direct'): Det
 
   const currencyCode = symbolToCode(symbolOrCode);
   if (!currencyCode) return null;
+  if (!isTokenBoundarySafe(match.input, symbolOrCode, match.index, match[0])) return null;
 
   const amount = normalizeAmount(rawAmount);
   if (isNaN(amount) || amount <= 0) return null;
