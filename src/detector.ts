@@ -26,6 +26,7 @@ const PRICE_REGEX = new RegExp(
   `(?:(${SYM})\\s*(${AMOUNT})|(${AMOUNT})\\s*(${SYM}))`,
   'i'
 );
+const GLOBAL_PRICE_REGEX = new RegExp(PRICE_REGEX.source, 'gi');
 
 const ISO_CODES = new Set([
   'USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'INR', 'KRW',
@@ -96,7 +97,7 @@ function trySemanticDetection(element: Element): DetectedPrice | null {
   return null;
 }
 
-function parseMatch(match: RegExpExecArray): DetectedPrice | null {
+function parseMatch(match: RegExpExecArray, textSource?: 'full' | 'direct'): DetectedPrice | null {
   let symbolOrCode: string;
   let rawAmount: string;
 
@@ -116,7 +117,14 @@ function parseMatch(match: RegExpExecArray): DetectedPrice | null {
   const amount = normalizeAmount(rawAmount);
   if (isNaN(amount) || amount <= 0) return null;
 
-  return { amount, currencyCode, matchedText: match[0] };
+  return {
+    amount,
+    currencyCode,
+    matchedText: match[0],
+    matchStart: match.index,
+    matchEnd: match.index + match[0].length,
+    textSource,
+  };
 }
 
 function tryRegexDetection(text: string): DetectedPrice | null {
@@ -125,12 +133,12 @@ function tryRegexDetection(text: string): DetectedPrice | null {
   return parseMatch(match);
 }
 
-function tryRegexDetectionAll(text: string): DetectedPrice[] {
-  const globalRegex = new RegExp(PRICE_REGEX.source, 'gi');
+function tryRegexDetectionAll(text: string, textSource: 'full' | 'direct'): DetectedPrice[] {
+  GLOBAL_PRICE_REGEX.lastIndex = 0;
   const results: DetectedPrice[] = [];
   let match: RegExpExecArray | null;
-  while ((match = globalRegex.exec(text)) !== null) {
-    const price = parseMatch(match);
+  while ((match = GLOBAL_PRICE_REGEX.exec(text)) !== null) {
+    const price = parseMatch(match, textSource);
     if (price) results.push(price);
   }
   return results;
@@ -146,7 +154,7 @@ function directTextContent(element: Element): string {
   for (const node of element.childNodes) {
     if (node.nodeType === Node.TEXT_NODE) text += node.textContent ?? '';
   }
-  return text.trim();
+  return text;
 }
 
 export function detectPricesFromElement(element: Element): DetectedPrice[] {
@@ -154,16 +162,17 @@ export function detectPricesFromElement(element: Element): DetectedPrice[] {
     const semantic = trySemanticDetection(element);
     if (semantic) return [semantic];
 
-    const fullText = (element.textContent ?? '').trim();
+    const fullText = element.textContent ?? '';
     // Non-leaf elements with short content are likely price containers (Steam, Amazon…)
     // — use full textContent so nested prices are found, hitboxes handle precision.
     // Long elements use directTextContent to avoid matching entire paragraphs.
-    const text = element.childElementCount === 0 || fullText.length <= 150
-      ? fullText
-      : directTextContent(element);
+    const textSource = element.childElementCount === 0 || fullText.trim().length <= 150
+      ? 'full'
+      : 'direct';
+    const text = textSource === 'full' ? fullText : directTextContent(element);
 
-    if (!text) return [];
-    return tryRegexDetectionAll(text);
+    if (!text.trim()) return [];
+    return tryRegexDetectionAll(text, textSource);
   } catch {
     return [];
   }
