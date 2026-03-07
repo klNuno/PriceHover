@@ -311,9 +311,17 @@ export default defineContentScript({
       showTooltip([detected], rect.left + rect.width / 2, rect.top, rect.bottom);
     }
 
+    function onViewportChange(): void {
+      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+      clearMultiHover();
+      hideTooltip();
+    }
+
     document.addEventListener('mouseover', onMouseOver, { passive: true });
     document.addEventListener('mouseout', onMouseOut, { passive: true });
     document.addEventListener('selectionchange', onSelectionChange, { passive: true });
+    document.addEventListener('scroll', onViewportChange, { passive: true, capture: true });
+    window.addEventListener('resize', onViewportChange, { passive: true });
 
     const onStorageChanged: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, areaName) => {
       if (areaName !== 'local') return;
@@ -331,6 +339,8 @@ export default defineContentScript({
       document.removeEventListener('mouseover', onMouseOver);
       document.removeEventListener('mouseout', onMouseOut);
       document.removeEventListener('selectionchange', onSelectionChange);
+      document.removeEventListener('scroll', onViewportChange, true);
+      window.removeEventListener('resize', onViewportChange);
       chrome.storage.onChanged.removeListener(onStorageChanged);
       clearMultiHover();
       hideTooltip();

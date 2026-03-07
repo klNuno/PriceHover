@@ -60,10 +60,10 @@
       </span>
     </div>
 
-    {#if rows().length > 0}
+    {#if rows.length > 0}
       <div class="ph-divider"></div>
       <ul class="ph-list">
-        {#each rows() as row (row.code)}
+        {#each rows as row (row.code)}
           <li class="ph-item">
             <img
               class="ph-flag"

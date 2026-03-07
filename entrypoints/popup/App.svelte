@@ -4,6 +4,12 @@
   import { STORAGE, DEFAULT_CURRENCIES } from '../../src/types';
   import { detectPriceFromText } from '../../src/detector';
   import { formatCurrencyAmount } from '../../src/formatter';
+  import type { DetectedPrice } from '../../src/types';
+
+  interface TargetedConversionQuery {
+    source: DetectedPrice;
+    targetCode: string;
+  }
 
   // Build alias map automatically from CURRENCIES names (first match wins = most common first).
   // Skips generic geographic words. Adds plurals and a few informal names.
@@ -12,6 +18,7 @@
       'kong', 'saudi', 'united', 'arab', 'emirates', 'costa', 'rica', 'de', 'and']);
     const map = new Map<string, string>();
     for (const c of CURRENCIES) {
+      map.set(c.code.toLowerCase(), c.code);
       for (const word of c.name.toLowerCase().split(/\s+/)) {
         if (word.length > 2 && !skip.has(word) && !map.has(word)) {
           map.set(word, c.code);
@@ -33,12 +40,43 @@
     return map;
   })();
 
+  function resolveCurrencyCode(token: string): string | null {
+    const normalized = token.trim().toLowerCase();
+    if (!normalized) return null;
+
+    const fromAlias = CURRENCY_ALIASES.get(normalized);
+    if (fromAlias) return fromAlias;
+
+    const upper = normalized.toUpperCase();
+    return CURRENCY_BY_CODE.has(upper) ? upper : null;
+  }
+
   function normalizeQuery(q: string): string {
     const m = q.match(/^([\d,.]+)\s+([a-zÀ-ÿ]+)$|^([a-zÀ-ÿ]+)\s+([\d,.]+)$/i);
     if (!m) return q;
     const [amount, word] = m[1] ? [m[1], m[2]] : [m[4], m[3]];
-    const code = CURRENCY_ALIASES.get(word.toLowerCase());
+    const code = resolveCurrencyCode(word);
     return code ? `${amount} ${code}` : q;
+  }
+
+  function parseTargetedConversionQuery(q: string): TargetedConversionQuery | null {
+    const tokens = q.trim().split(/\s+/).filter(Boolean);
+    if (tokens.length !== 3) return null;
+
+    const amountIndex = tokens.findIndex((token) => /^[\d,.]+$/.test(token));
+    if (amountIndex === -1) return null;
+
+    const amountToken = tokens[amountIndex];
+    const currencyTokens = tokens.filter((_, index) => index !== amountIndex);
+    const sourceCode = resolveCurrencyCode(currencyTokens[0]);
+    const targetCode = resolveCurrencyCode(currencyTokens[1]);
+    if (!sourceCode || !targetCode || sourceCode === targetCode) return null;
+
+    const source =
+      detectPriceFromText(`${amountToken} ${sourceCode}`) ??
+      detectPriceFromText(`${sourceCode} ${amountToken}`);
+
+    return source ? { source, targetCode } : null;
   }
 
   let selectedCodes = $state<string[]>(DEFAULT_CURRENCIES);
@@ -83,22 +121,32 @@
     await save();
   }
 
+  const targetedConversion = $derived.by(() => parseTargetedConversionQuery(searchQuery));
+
   // Detect if search is a price expression → calculator mode
   const parsed = $derived.by(() => {
     const q = searchQuery.trim();
-    return detectPriceFromText(q) ?? detectPriceFromText(normalizeQuery(q));
+    return targetedConversion?.source ?? detectPriceFromText(q) ?? detectPriceFromText(normalizeQuery(q));
   });
   const isCalcMode = $derived(parsed !== null);
 
   // Calc mode: all currencies. Search mode: filter by text. Default: all.
-  const visibleCurrencies = $derived(
-    (!isCalcMode && searchQuery.trim())
-      ? CURRENCIES.filter(c =>
-          c.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.name.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      : CURRENCIES
-  );
+  const visibleCurrencies = $derived.by(() => {
+    if (targetedConversion) {
+      const currency = CURRENCY_BY_CODE.get(targetedConversion.targetCode);
+      return currency ? [currency] : [];
+    }
+
+    if (!isCalcMode && searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      return CURRENCIES.filter(c =>
+        c.code.toLowerCase().includes(query) ||
+        c.name.toLowerCase().includes(query)
+      );
+    }
+
+    return CURRENCIES;
+  });
 
   // Precomputed conversion map: code → formatted string (all currencies in calc mode)
   const conversionMap = $derived.by(() => {
@@ -106,7 +154,12 @@
     if (!parsed || !rates) return map;
     const sourceRate = rates[parsed.currencyCode];
     if (!sourceRate) return map;
-    for (const { code } of CURRENCIES) {
+
+    const targetCodes = targetedConversion
+      ? [targetedConversion.targetCode]
+      : CURRENCIES.map(({ code }) => code);
+
+    for (const code of targetCodes) {
       if (code === parsed.currencyCode) continue;
       const targetRate = rates[code];
       const currency = CURRENCY_BY_CODE.get(code);
