@@ -17,7 +17,10 @@ export interface StoredRates {
 export interface DetectedPrice {
   amount: number;
   currencyCode: string;
-  matchedText?: string; // raw text matched by regex, used for Range-based positioning
+  matchedText?: string; // raw text matched by regex, used for display/debugging
+  matchStart?: number; // offset in the analyzed text, used for hitbox positioning
+  matchEnd?: number; // end offset (exclusive) in the analyzed text
+  textSource?: 'full' | 'direct'; // which text extraction mode produced the match
 }
 
 export interface ConvertedPrice {

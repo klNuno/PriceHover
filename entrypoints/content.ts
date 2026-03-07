@@ -5,6 +5,7 @@ import { STORAGE, DEFAULT_CURRENCIES } from '../src/types';
 import type { ConvertedPrice, DetectedPrice, ExchangeRates } from '../src/types';
 import { formatCurrencyAmount } from '../src/formatter';
 import Tooltip from '../src/tooltip.svelte';
+import { hideTooltipState, showTooltipState } from '../src/tooltip-state';
 import tooltipStyles from '../src/tooltip.css?inline';
 
 const E = (msg: string, err: unknown) => console.error(`[PH] ${msg}`, err);
@@ -30,14 +31,19 @@ export default defineContentScript({
     const container = document.createElement('div');
     shadow.appendChild(container);
 
-    let tooltipInstance: ReturnType<typeof mount> | null = null;
+    const tooltipInstance = mount(Tooltip, { target: container });
     let rafId: number | null = null;
 
     let cachedRates: ExchangeRates | null = null;
     let cachedCurrencies: string[] = DEFAULT_CURRENCIES;
-    let cacheLoadedAt = 0;
-    const CACHE_TTL = 10_000;
+    let cachedCurrencySet = new Set(DEFAULT_CURRENCIES);
     let refreshPromise: Promise<void> | null = null;
+    const detectionCache = new WeakMap<Element, DetectedPrice[] | null>();
+
+    function setCachedCurrencies(next: string[] | undefined): void {
+      cachedCurrencies = next?.length ? next : DEFAULT_CURRENCIES;
+      cachedCurrencySet = new Set(cachedCurrencies);
+    }
 
     function refreshCache(): Promise<void> {
       if (!refreshPromise) {
@@ -45,11 +51,10 @@ export default defineContentScript({
           try {
             const r = await chrome.storage.local.get([STORAGE.RATES, STORAGE.CURRENCIES]);
             if (r?.[STORAGE.RATES]) cachedRates = r[STORAGE.RATES] as ExchangeRates;
-            if (r?.[STORAGE.CURRENCIES]) cachedCurrencies = r[STORAGE.CURRENCIES] as string[];
+            if (r?.[STORAGE.CURRENCIES]) setCachedCurrencies(r[STORAGE.CURRENCIES] as string[]);
           } catch (err) {
             E('storage get failed', err);
           }
-          cacheLoadedAt = Date.now();
         })().finally(() => { refreshPromise = null; });
       }
       return refreshPromise;
@@ -58,10 +63,7 @@ export default defineContentScript({
     refreshCache();
 
     function hideTooltip(): void {
-      if (tooltipInstance) {
-        unmount(tooltipInstance);
-        tooltipInstance = null;
-      }
+      hideTooltipState();
     }
 
     function convertPrice(
@@ -88,37 +90,24 @@ export default defineContentScript({
         .filter((c): c is ConvertedPrice => c !== null);
     }
 
-    let showGen = 0;
+    function showTooltip(prices: DetectedPrice[], x: number, y: number, yBottom: number): void {
+      if (!cachedRates) {
+        refreshCache();
+        return;
+      }
 
-    async function showTooltip(prices: DetectedPrice[], x: number, y: number, yBottom: number): Promise<void> {
-      const gen = ++showGen;
-      if (Date.now() - cacheLoadedAt > CACHE_TTL) await refreshCache();
-      if (gen !== showGen) return; // superseded by a newer call
-      if (!cachedRates) return;
-
-      const allConversions = prices.map(p => convertPrice(p, cachedRates!, cachedCurrencies));
-      hideTooltip();
-
-      tooltipInstance = mount(Tooltip, {
-        target: container,
-        props: { sources: prices, allConversions, x, y, yBottom },
-      });
+      const allConversions = prices.map((p) => convertPrice(p, cachedRates!, cachedCurrencies));
+      showTooltipState({ sources: prices, allConversions, x, y, yBottom });
     }
 
-    function findPriceRange(element: Element, matchedText: string): Range | null {
-      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-      let node: Node | null;
-      while ((node = walker.nextNode())) {
-        const content = node.textContent ?? '';
-        const idx = content.indexOf(matchedText);
-        if (idx !== -1) {
-          const range = document.createRange();
-          range.setStart(node, idx);
-          range.setEnd(node, idx + matchedText.length);
-          return range;
-        }
+    function detectPricesWithCache(element: Element): DetectedPrice[] {
+      if (detectionCache.has(element)) {
+        return detectionCache.get(element) ?? [];
       }
-      return null;
+
+      const detected = detectPricesFromElement(element);
+      detectionCache.set(element, detected.length ? detected : null);
+      return detected;
     }
 
     // ── Multi-price hover state ──────────────────────────────────────────────
@@ -128,19 +117,86 @@ export default defineContentScript({
       rects: DOMRect[];  // getClientRects() — one rect per line when text wraps
     }
 
+    interface TextSegment {
+      node: Text;
+      start: number;
+      end: number;
+    }
+
     let activeElement: Element | null = null;
     let priceHitboxes: PriceHitbox[] = [];
     let activePriceIdx = -1;
     let mmRafId: number | null = null;
 
+    function collectTextSegments(element: Element, directOnly: boolean): TextSegment[] {
+      const segments: TextSegment[] = [];
+      let offset = 0;
+
+      const pushTextNode = (node: Node): void => {
+        const content = node.textContent ?? '';
+        if (!content.length) return;
+        segments.push({ node: node as Text, start: offset, end: offset + content.length });
+        offset += content.length;
+      };
+
+      if (directOnly) {
+        for (const node of element.childNodes) {
+          if (node.nodeType === Node.TEXT_NODE) pushTextNode(node);
+        }
+        return segments;
+      }
+
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        pushTextNode(node);
+      }
+      return segments;
+    }
+
     function buildHitboxes(element: Element, prices: DetectedPrice[]): PriceHitbox[] {
+      const positionalPrices = prices.filter(
+        (price): price is DetectedPrice & { matchStart: number; matchEnd: number; textSource: 'full' | 'direct' } =>
+          typeof price.matchStart === 'number' &&
+          typeof price.matchEnd === 'number' &&
+          (price.textSource === 'full' || price.textSource === 'direct')
+      );
+
+      if (!positionalPrices.length) return [];
+
+      const segments = collectTextSegments(element, positionalPrices[0].textSource === 'direct');
+      if (!segments.length) return [];
+
       const result: PriceHitbox[] = [];
-      for (const price of prices) {
-        if (!price.matchedText) continue;
-        const range = findPriceRange(element, price.matchedText);
-        if (!range) continue;
+      let segmentIndex = 0;
+
+      for (const price of positionalPrices) {
+        while (segmentIndex < segments.length && segments[segmentIndex].end <= price.matchStart) {
+          segmentIndex++;
+        }
+
+        if (segmentIndex >= segments.length) break;
+
+        const startSegment = segments[segmentIndex];
+        if (price.matchStart < startSegment.start || price.matchStart > startSegment.end) continue;
+
+        let endSegmentIndex = segmentIndex;
+        while (endSegmentIndex < segments.length && segments[endSegmentIndex].end < price.matchEnd) {
+          endSegmentIndex++;
+        }
+
+        if (endSegmentIndex >= segments.length) break;
+
+        const endSegment = segments[endSegmentIndex];
+        if (price.matchEnd < endSegment.start || price.matchEnd > endSegment.end) continue;
+
+        const range = document.createRange();
+        range.setStart(startSegment.node, price.matchStart - startSegment.start);
+        range.setEnd(endSegment.node, price.matchEnd - endSegment.start);
+
         const rects = [...range.getClientRects()];
         if (rects.length) result.push({ price, rects });
+        segmentIndex = endSegmentIndex;
       }
       return result;
     }
@@ -201,12 +257,12 @@ export default defineContentScript({
         try {
           // Try target first, then parent once — handles split DOM like <span>¥</span><span>348</span>
           let priceEl: Element = target;
-          let allPrices = detectPricesFromElement(target);
+          let allPrices = detectPricesWithCache(target);
           if (!allPrices.length && target.parentElement && target.parentElement !== host) {
-            const parentPrices = detectPricesFromElement(target.parentElement);
+            const parentPrices = detectPricesWithCache(target.parentElement);
             if (parentPrices.length) { allPrices = parentPrices; priceEl = target.parentElement; }
           }
-          const prices = allPrices.filter(p => !cachedCurrencies.includes(p.currencyCode));
+          const prices = allPrices.filter((p) => !cachedCurrencySet.has(p.currencyCode));
           if (!prices.length) { hideTooltip(); return; }
 
           // Always use hitbox approach: tooltip shows only when cursor is over price text
@@ -248,7 +304,7 @@ export default defineContentScript({
       if (!text) { hideTooltip(); return; }
 
       const detected = detectPriceFromText(text);
-      if (!detected || cachedCurrencies.includes(detected.currencyCode)) { hideTooltip(); return; }
+      if (!detected || cachedCurrencySet.has(detected.currencyCode)) { hideTooltip(); return; }
 
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
@@ -259,12 +315,26 @@ export default defineContentScript({
     document.addEventListener('mouseout', onMouseOut, { passive: true });
     document.addEventListener('selectionchange', onSelectionChange, { passive: true });
 
+    const onStorageChanged: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, areaName) => {
+      if (areaName !== 'local') return;
+      if (changes[STORAGE.RATES]?.newValue) {
+        cachedRates = changes[STORAGE.RATES].newValue as ExchangeRates;
+      }
+      if (changes[STORAGE.CURRENCIES]) {
+        setCachedCurrencies(changes[STORAGE.CURRENCIES].newValue as string[] | undefined);
+      }
+    };
+
+    chrome.storage.onChanged.addListener(onStorageChanged);
+
     window.addEventListener('unload', () => {
       document.removeEventListener('mouseover', onMouseOver);
       document.removeEventListener('mouseout', onMouseOut);
       document.removeEventListener('selectionchange', onSelectionChange);
+      chrome.storage.onChanged.removeListener(onStorageChanged);
       clearMultiHover();
       hideTooltip();
+      unmount(tooltipInstance);
       host.remove();
     });
   },
