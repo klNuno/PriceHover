@@ -10,7 +10,7 @@ Hover over any price on any webpage and instantly see it converted to your curre
 
 ## Install
 
-[Chrome Web Store](#) · [Firefox Add-ons](#)
+[Chrome Web Store](#) · [Firefox Add-ons](https://addons.mozilla.org/fr/firefox/addon/pricehover)
 
 ## How it works
 
