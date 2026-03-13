@@ -1,5 +1,5 @@
 import type { DetectedPrice } from './types';
-import { SYMBOL_TO_CODE } from './currencies';
+import { CURRENCY_BY_CODE, SYMBOL_TO_CODE } from './currencies';
 
 // Multi-char symbols must come BEFORE single-char to win in alternation.
 const SYM =
@@ -20,7 +20,7 @@ const SYM =
 // 1. Formatted with separators: 1,234.56 / 1.234,56 / 1 234,56
 // 2. Plain digit run: 746000 / 22000 (no internal separators — common in VND, IDR, KZT…)
 const AMOUNT =
-  '(?:[\\d]{1,3}(?:[,\\.\\s]\\d{3})+(?:[,\\.]\\d{1,2})?|[\\d]+(?:[,\\.]\\d{1,2})?)';
+  '(?:[\\d]{1,3}(?:[,\\.\\s]\\d{3}){1,5}(?:[,\\.]\\d{1,2})?|[\\d]+(?:[,\\.]\\d{1,2})?)';
 
 const PRICE_REGEX = new RegExp(
   `(?:(${SYM})\\s*(${AMOUNT})|(${AMOUNT})\\s*(${SYM}))`,
@@ -28,12 +28,7 @@ const PRICE_REGEX = new RegExp(
 );
 const GLOBAL_PRICE_REGEX = new RegExp(PRICE_REGEX.source, 'gi');
 
-const ISO_CODES = new Set([
-  'USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'INR', 'KRW',
-  'BRL', 'MXN', 'SGD', 'HKD', 'NOK', 'SEK', 'DKK', 'PLN', 'CZK', 'HUF',
-  'RUB', 'TRY', 'ZAR', 'AED', 'SAR', 'NZD', 'THB', 'IDR', 'MYR', 'PHP',
-  'UAH', 'VND', 'KZT', 'ILS', 'CRC', 'UYU', 'PEN', 'KWD', 'QAR', 'TWD', 'NGN',
-]);
+const ISO_CODES = new Set(CURRENCY_BY_CODE.keys());
 const LETTER_REGEX = /\p{L}/u;
 
 function normalizeAmount(raw: string): number {
@@ -101,11 +96,15 @@ function trySemanticDetection(element: Element): DetectedPrice | null {
       }
     }
     if (el.hasAttribute('data-price') && amount === null) {
-      const parsed = parseFloat(el.getAttribute('data-price')!);
-      if (!isNaN(parsed)) amount = parsed;
+      const dataPrice = el.getAttribute('data-price');
+      if (dataPrice) {
+        const parsed = parseFloat(dataPrice);
+        if (!isNaN(parsed)) amount = parsed;
+      }
     }
     if (el.hasAttribute('data-currency') && currencyCode === null) {
-      currencyCode = el.getAttribute('data-currency')!.trim().toUpperCase();
+      const dataCurrency = el.getAttribute('data-currency');
+      if (dataCurrency) currencyCode = dataCurrency.trim().toUpperCase();
     }
     if (amount !== null && currencyCode !== null) return { amount, currencyCode };
   }
