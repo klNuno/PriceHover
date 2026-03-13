@@ -182,6 +182,7 @@
       type="search"
       class="search"
       placeholder="Search or type a price…"
+      aria-label="Search currencies"
       bind:value={searchQuery}
     />
   </div>

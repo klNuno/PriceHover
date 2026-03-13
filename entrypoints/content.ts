@@ -33,6 +33,7 @@ export default defineContentScript({
 
     const tooltipInstance = mount(Tooltip, { target: container });
     let rafId: number | null = null;
+    let selRafId: number | null = null;
 
     let cachedRates: ExchangeRates | null = null;
     let cachedCurrencies: string[] = DEFAULT_CURRENCIES;
@@ -123,6 +124,9 @@ export default defineContentScript({
       end: number;
     }
 
+    const MIN_HITBOX_WIDTH = 6;
+    const MIN_HITBOX_HEIGHT = 6;
+
     let activeElement: Element | null = null;
     let priceHitboxes: PriceHitbox[] = [];
     let activePriceIdx = -1;
@@ -194,7 +198,9 @@ export default defineContentScript({
         range.setStart(startSegment.node, price.matchStart - startSegment.start);
         range.setEnd(endSegment.node, price.matchEnd - endSegment.start);
 
-        const rects = [...range.getClientRects()];
+        const rects = [...range.getClientRects()].filter(
+          (rect) => rect.width >= MIN_HITBOX_WIDTH && rect.height >= MIN_HITBOX_HEIGHT
+        );
         if (rects.length) result.push({ price, rects });
         segmentIndex = endSegmentIndex;
       }
@@ -297,18 +303,27 @@ export default defineContentScript({
     }
 
     function onSelectionChange(): void {
-      const selection = window.getSelection();
-      if (!selection || selection.isCollapsed) { hideTooltip(); return; }
+      if (selRafId !== null) cancelAnimationFrame(selRafId);
+      selRafId = requestAnimationFrame(() => {
+        selRafId = null;
+        try {
+          const selection = window.getSelection();
+          if (!selection || selection.isCollapsed) { hideTooltip(); return; }
 
-      const text = selection.toString().trim();
-      if (!text) { hideTooltip(); return; }
+          const text = selection.toString().trim();
+          if (!text) { hideTooltip(); return; }
 
-      const detected = detectPriceFromText(text);
-      if (!detected || cachedCurrencySet.has(detected.currencyCode)) { hideTooltip(); return; }
+          const detected = detectPriceFromText(text);
+          if (!detected || cachedCurrencySet.has(detected.currencyCode)) { hideTooltip(); return; }
 
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      showTooltip([detected], rect.left + rect.width / 2, rect.top, rect.bottom);
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          showTooltip([detected], rect.left + rect.width / 2, rect.top, rect.bottom);
+        } catch (err) {
+          E('onSelectionChange error', err);
+          hideTooltip();
+        }
+      });
     }
 
     function onViewportChange(): void {
@@ -342,6 +357,7 @@ export default defineContentScript({
       document.removeEventListener('scroll', onViewportChange, true);
       window.removeEventListener('resize', onViewportChange);
       chrome.storage.onChanged.removeListener(onStorageChanged);
+      if (selRafId !== null) { cancelAnimationFrame(selRafId); selRafId = null; }
       clearMultiHover();
       hideTooltip();
       unmount(tooltipInstance);

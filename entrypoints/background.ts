@@ -43,7 +43,7 @@ export default defineBackground(() => {
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: 1440 });
 
   chrome.alarms.onAlarm.addListener(({ name }) => {
-    if (name === ALARM_NAME) refreshRates();
+    if (name === ALARM_NAME) refreshRates().catch(() => {});
   });
 
 });
