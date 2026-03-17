@@ -1,7 +1,6 @@
 import { CACHE_DURATION_MS, STORAGE } from '../src/types';
 
 const RATES_URL = 'https://open.er-api.com/v6/latest/USD';
-const ALARM_NAME = 'refreshRates';
 
 async function refreshRates(): Promise<void> {
   try {
@@ -32,18 +31,16 @@ async function refreshIfStale(): Promise<void> {
 }
 
 export default defineBackground(() => {
-  chrome.runtime.onInstalled.addListener(async () => {
+  chrome.runtime.onInstalled?.addListener(async () => {
     await refreshRates();
   });
 
-  chrome.runtime.onStartup.addListener(async () => {
+  chrome.runtime.onStartup?.addListener(async () => {
     await refreshIfStale();
   });
 
-  chrome.alarms.create(ALARM_NAME, { periodInMinutes: 1440 });
+  setInterval(() => { refreshRates().catch(() => {}); }, 1440 * 60 * 1000);
 
-  chrome.alarms.onAlarm.addListener(({ name }) => {
-    if (name === ALARM_NAME) refreshRates().catch(() => {});
-  });
-
+  // Initial fetch for environments that don't fire onInstalled/onStartup
+  refreshIfStale().catch(() => {});
 });

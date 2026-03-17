@@ -174,6 +174,7 @@
 <div class="popup">
   <header class="header">
     <span class="title">PriceHover</span>
+    <span class="version">v1.2.3</span>
     <span class="count">{selectedCodes.length} selected</span>
   </header>
 
@@ -272,6 +273,7 @@
     flex-shrink: 0;
   }
   .title { font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .version { font-size: 10px; color: var(--fg2); font-weight: 400; margin-right: auto; margin-left: 6px; }
   .count { font-size: 11px; color: var(--fg2); }
 
   .search-wrap {
