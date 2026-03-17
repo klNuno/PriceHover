@@ -1,7 +1,7 @@
 import { mount, unmount } from 'svelte';
 import { detectPricesFromElement, detectPriceFromText } from '../src/detector';
 import { CURRENCY_BY_CODE } from '../src/currencies';
-import { STORAGE, DEFAULT_CURRENCIES } from '../src/types';
+import { STORAGE, DEFAULT_CURRENCIES, CACHE_DURATION_MS } from '../src/types';
 import type { ConvertedPrice, DetectedPrice, ExchangeRates } from '../src/types';
 import { formatCurrencyAmount } from '../src/formatter';
 import Tooltip from '../src/tooltip.svelte';
@@ -46,15 +46,41 @@ export default defineContentScript({
       cachedCurrencySet = new Set(cachedCurrencies);
     }
 
+    async function fetchRatesDirect(): Promise<void> {
+      try {
+        const res = await fetch('https://open.er-api.com/v6/latest/USD');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.rates) return;
+        cachedRates = data.rates as ExchangeRates;
+        // Try to persist, but don't fail if storage is stubbed
+        try {
+          await chrome.storage.local.set({
+            [STORAGE.RATES]: data.rates,
+            [STORAGE.RATES_TS]: Date.now(),
+          });
+        } catch { /* storage may be stubbed */ }
+      } catch (err) {
+        E('direct fetch failed', err);
+      }
+    }
+
     function refreshCache(): Promise<void> {
       if (!refreshPromise) {
         refreshPromise = (async () => {
           try {
-            const r = await chrome.storage.local.get([STORAGE.RATES, STORAGE.CURRENCIES]);
+            const r = await chrome.storage.local.get([STORAGE.RATES, STORAGE.RATES_TS, STORAGE.CURRENCIES]);
             if (r?.[STORAGE.RATES]) cachedRates = r[STORAGE.RATES] as ExchangeRates;
             if (r?.[STORAGE.CURRENCIES]) setCachedCurrencies(r[STORAGE.CURRENCIES] as string[]);
-          } catch (err) {
-            E('storage get failed', err);
+
+            // Fetch directly if storage had no rates or they're stale
+            const ts: number = (r?.[STORAGE.RATES_TS] as number) ?? 0;
+            if (!cachedRates || Date.now() - ts > CACHE_DURATION_MS) {
+              await fetchRatesDirect();
+            }
+          } catch {
+            // storage.local.get itself failed (stubbed) — fetch directly
+            if (!cachedRates) await fetchRatesDirect();
           }
         })().finally(() => { refreshPromise = null; });
       }
