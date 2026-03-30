@@ -11,8 +11,8 @@ export default defineConfig({
   manifest: ({ browser }) => ({
     name: 'PriceHover',
     description: 'Converts prices on any webpage on hover',
-    version: '1.2.3',
-    permissions: ['storage', 'alarms'],
+    version: '1.2.4',
+    permissions: ['storage'],
     host_permissions: ['https://open.er-api.com/*'],
     icons: {
       16: 'icons/icon-16.png',
