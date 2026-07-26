@@ -47,6 +47,10 @@ currency list becomes your base currency plus targets, in the order it was in.
 
 - Added `activeTab`, which is what lets the popup name the site you are on so you can pause it. It grants access to one tab, only when you click the extension icon, and shows no install warning. The extension still contacts exactly one host.
 
+### License
+
+- Relicensed from MIT to **GPL-3.0-or-later**. A fork that gets distributed — published to a store included — now has to release its source under the same terms. Every dependency is GPL-compatible, and only Svelte (MIT) ships inside the extension.
+
 ## 1.3.0
 
 ### Privacy
