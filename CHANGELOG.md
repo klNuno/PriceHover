@@ -16,7 +16,7 @@
 - `KWD` and other three-decimal currencies keep their decimals instead of being read as thousands.
 - Added `Kč`, `Ft`, `US$`, `S/`, `Fr.`, `kr.`, `د.إ` and `﷼`, which were listed as currency symbols or printed in the wild but absent from the matcher.
 - Indian lakh grouping is understood: `₹1,49,900` reads as 149900 instead of matching nothing.
-- Semantic detection (`itemprop="price"`, `data-price`) shows a tooltip again. It reported a price with no text offsets, and the hitbox rewrite silently dropped every one of them. It also now rejects currencies the extension cannot convert instead of matching a price to nothing.
+- Semantic detection (`itemprop="price"`, `data-price`) works again, on two counts. It reported a price with no text offsets and the hitbox rewrite silently dropped every one of them; and it only ever walked ancestors, while real schema.org markup puts `priceCurrency` in a `<meta>` *beside* the price, so it almost never found both halves. It now searches inside the enclosing `itemscope` and rejects currencies the extension cannot convert.
 
 ### Correctness
 

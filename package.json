@@ -20,6 +20,7 @@
     "svelte": "^5.0.0"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.11.1",
     "@resvg/resvg-js": "^2.6.2",
     "@types/bun": "^1.1.0",
     "@types/chrome": "^0.2.2",

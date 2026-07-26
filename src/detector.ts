@@ -206,23 +206,39 @@ function trySemanticDetection(element: Element): DetectedPrice | null {
   let rawAmount: string | null = null;
   let currencyCode: string | null = null;
 
-  const readAttr = (target: Element): string =>
+  const readValue = (target: Element): string =>
     (target.getAttribute('content') ?? target.textContent ?? '').trim();
+  const digitsOnly = (value: string): string | null =>
+    value.replace(/[^\d.,]/g, '') || null;
 
   for (let depth = 0; depth < 6 && el; depth++, el = el.parentElement) {
     if (el.hasAttribute('itemprop')) {
       const prop = el.getAttribute('itemprop');
-      if (prop === 'price' && rawAmount === null) {
-        const cleaned = readAttr(el).replace(/[^\d.,]/g, '');
-        if (cleaned) rawAmount = cleaned;
-      }
+      if (prop === 'price' && rawAmount === null) rawAmount = digitsOnly(readValue(el));
       if (prop === 'priceCurrency' && currencyCode === null) {
-        currencyCode = readAttr(el).toUpperCase();
+        currencyCode = readValue(el).toUpperCase();
       }
     }
+
+    // Real schema.org markup puts price and priceCurrency side by side inside an
+    // itemscope, not on the same node and not on an ancestor of each other:
+    //   <div itemscope><meta itemprop="priceCurrency" content="JPY">
+    //                  <span itemprop="price" content="24800">…</span></div>
+    // Walking ancestors alone therefore finds one half and never the other.
+    // The lookup is scoped to the itemscope container so it stays cheap.
+    if (el.hasAttribute('itemscope')) {
+      if (rawAmount === null) {
+        const node = el.querySelector('[itemprop="price"]');
+        if (node) rawAmount = digitsOnly(readValue(node));
+      }
+      if (currencyCode === null) {
+        const node = el.querySelector('[itemprop="priceCurrency"]');
+        if (node) currencyCode = readValue(node).toUpperCase();
+      }
+    }
+
     if (el.hasAttribute('data-price') && rawAmount === null) {
-      const cleaned = (el.getAttribute('data-price') ?? '').replace(/[^\d.,]/g, '');
-      if (cleaned) rawAmount = cleaned;
+      rawAmount = digitsOnly(el.getAttribute('data-price') ?? '');
     }
     if (el.hasAttribute('data-currency') && currencyCode === null) {
       const value = el.getAttribute('data-currency');
