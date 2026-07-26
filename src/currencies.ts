@@ -56,53 +56,9 @@ export function flagToCountryCode(flag: string): string {
     .join('');
 }
 
-// Symbol to currency code mapping (for regex detection)
-export const SYMBOL_TO_CODE: Record<string, string> = {
-  '$': 'USD',
-  '€': 'EUR',
-  '£': 'GBP',
-  '¥': 'JPY',
-  '￥': 'JPY',
-  '₹': 'INR',
-  '₩': 'KRW',
-  '₦': 'NGN',
-  '₱': 'PHP',
-  '฿': 'THB',
-  '₺': 'TRY',
-  '₽': 'RUB',
-  '₴': 'UAH',
-  '₫': 'VND',
-  '₸': 'KZT',
-  '₪': 'ILS',
-  '₡': 'CRC',
-  'COL$': 'COP',
-  'CLP$': 'CLP',
-  'NT$': 'TWD',
-  'CDN$': 'CAD',
-  'Mex$': 'MXN',
-  'MEX$': 'MXN',
-  'MX$': 'MXN',
-  'R$': 'BRL',
-  'A$': 'AUD',
-  'CA$': 'CAD',
-  'S$': 'SGD',
-  'HK$': 'HKD',
-  'NZ$': 'NZD',
-  '$U': 'UYU',
-  'S/.': 'PEN',
-  'Rp': 'IDR',
-  'RM': 'MYR',
-  'R': 'ZAR',
-  'zł': 'PLN',
-  'ZŁ': 'PLN',
-  // 'kr' is ambiguous: used by NOK (Norway), SEK (Sweden), DKK (Denmark) and ISK (Iceland).
-  // We default to SEK (most commonly seen on international e-commerce).
-  // Accurate detection would require knowing the page's locale/TLD, which is out of scope.
-  'kr': 'SEK',
-  'KR': 'SEK',
-  'SR': 'SAR',
-  'QR': 'QAR',
-  'KD': 'KWD',
-  'Fr': 'CHF',
-  'FR': 'CHF',
-};
+// Detection symbols and their positional rules live in detector.ts, next to the
+// regex that consumes them.
+//
+// One ambiguity is worth stating here: 'kr' is shared by NOK, SEK, DKK and ISK.
+// We default to SEK, the one most often seen on international e-commerce.
+// Resolving it properly would need the page locale or TLD, which is out of scope.

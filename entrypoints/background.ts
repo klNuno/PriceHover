@@ -1,21 +1,15 @@
 import { CACHE_DURATION_MS, STORAGE } from '../src/types';
-
-const RATES_URL = 'https://open.er-api.com/v6/latest/USD';
+import { fetchRates } from '../src/rates';
 
 async function refreshRates(): Promise<void> {
   try {
-    const res = await fetch(RATES_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const data = await res.json();
-    if (!data.rates) throw new Error('Invalid response: missing rates');
+    const rates = await fetchRates();
+    if (!rates) throw new Error('Invalid response: missing or unusable rates');
 
     await chrome.storage.local.set({
-      [STORAGE.RATES]: data.rates,
+      [STORAGE.RATES]: rates,
       [STORAGE.RATES_TS]: Date.now(),
     });
-
-    console.log('[PriceHover] Rates updated successfully');
   } catch (err) {
     console.error('[PriceHover] Failed to refresh rates:', err);
   }
@@ -23,24 +17,25 @@ async function refreshRates(): Promise<void> {
 
 async function refreshIfStale(): Promise<void> {
   const stored = await chrome.storage.local.get([STORAGE.RATES_TS]);
-  const ts: number = stored[STORAGE.RATES_TS] ?? 0;
+  const ts = (stored as Record<string, unknown>)[STORAGE.RATES_TS];
+  const lastRefresh = typeof ts === 'number' ? ts : 0;
 
-  if (Date.now() - ts > CACHE_DURATION_MS) {
+  if (Date.now() - lastRefresh > CACHE_DURATION_MS) {
     await refreshRates();
   }
 }
 
 export default defineBackground(() => {
-  chrome.runtime.onInstalled?.addListener(async () => {
-    await refreshRates();
-  });
+  chrome.runtime.onInstalled?.addListener(() => { refreshIfStale().catch(() => {}); });
+  chrome.runtime.onStartup?.addListener(() => { refreshIfStale().catch(() => {}); });
 
-  chrome.runtime.onStartup?.addListener(async () => {
-    await refreshIfStale();
-  });
-
-  setInterval(() => { refreshRates().catch(() => {}); }, 1440 * 60 * 1000);
-
-  // Initial fetch for environments that don't fire onInstalled/onStartup
+  // Initial fetch for environments that don't fire onInstalled/onStartup.
   refreshIfStale().catch(() => {});
+
+  // Only fires where the background page is persistent (Firefox, wrappers like
+  // Extendium). An MV3 service worker is torn down long before 24 h elapse, so
+  // Chrome relies on the checks above plus the content script, which refreshes
+  // stale rates itself. chrome.alarms would survive the teardown but costs an
+  // extra permission we deliberately do not ask for.
+  setInterval(() => { refreshRates().catch(() => {}); }, CACHE_DURATION_MS);
 });

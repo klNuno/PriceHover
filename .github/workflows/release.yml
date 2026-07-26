@@ -4,63 +4,73 @@ on:
   push:
     tags: ['v*.*.*']
 
+# Publishing to the Chrome Web Store and to AMO is done by hand, so this
+# workflow holds no store credentials and only needs to write the release.
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
+      # Actions are pinned to a commit SHA: a moving tag would let an upstream
+      # compromise run arbitrary code in a job that can write releases.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0 # the changelog step walks back to the previous tag
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
+
+      - name: Check the tag matches package.json
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun test
 
       - name: Build Chrome (MV3)
         run: bun run build
 
-      - name: Build Firefox (MV2)
+      - name: Build Firefox (MV3)
         run: bun run build:firefox
 
       - name: Zip Chrome
-        run: bun run wxt zip --browser chrome
+        run: bun run zip
 
       - name: Zip Firefox
-        run: bun run wxt zip --browser firefox
+        run: bun run zip:firefox
 
       - name: Generate changelog
         id: changelog
         run: |
-          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${{ github.ref_name }}$" | head -1)
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${GITHUB_REF_NAME}$" | head -1)
           if [ -z "$PREV_TAG" ]; then
             LOG=$(git log --pretty=format:"- %s" HEAD)
           else
             LOG=$(git log --pretty=format:"- %s" "${PREV_TAG}..HEAD")
           fi
-          echo "NOTES<<EOF" >> $GITHUB_OUTPUT
-          echo "$LOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "NOTES<<PRICEHOVER_EOF"
+            echo "$LOG"
+            echo "PRICEHOVER_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           body: ${{ steps.changelog.outputs.NOTES }}
           files: |
             .output/*-chrome.zip
             .output/*-firefox.zip
-
-      - name: Submit to Chrome Web Store
-        run: bun run wxt submit --browser chrome
-        env:
-          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
-          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
-          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
-          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
-
-      - name: Submit to Firefox AMO
-        run: bun run wxt submit --browser firefox
-        env:
-          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
-          FIREFOX_API_KEY: ${{ secrets.FIREFOX_API_KEY }}
-          FIREFOX_API_SECRET: ${{ secrets.FIREFOX_API_SECRET }}
+            .output/*-sources.zip

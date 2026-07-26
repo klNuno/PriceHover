@@ -1,17 +1,13 @@
 import { defineConfig } from 'wxt';
-import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-  extensionApi: 'chrome',
   manifestVersion: 3,
   modules: ['@wxt-dev/module-svelte'],
-  vite: () => ({
-    plugins: [tailwindcss()],
-  }),
   manifest: ({ browser }) => ({
     name: 'PriceHover',
     description: 'Converts prices on any webpage on hover',
-    version: '1.2.4',
+    // version is intentionally absent: WXT takes it from package.json, which
+    // keeps a single source of truth. The popup reads it back from the manifest.
     permissions: ['storage'],
     host_permissions: ['https://open.er-api.com/*'],
     icons: {

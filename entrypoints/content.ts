@@ -4,6 +4,7 @@ import { CURRENCY_BY_CODE } from '../src/currencies';
 import { STORAGE, DEFAULT_CURRENCIES, CACHE_DURATION_MS } from '../src/types';
 import type { ConvertedPrice, DetectedPrice, ExchangeRates } from '../src/types';
 import { formatCurrencyAmount } from '../src/formatter';
+import { fetchRates, parseRates } from '../src/rates';
 import Tooltip from '../src/tooltip.svelte';
 import { hideTooltipState, showTooltipState } from '../src/tooltip-state';
 import tooltipStyles from '../src/tooltip.css?inline';
@@ -39,7 +40,15 @@ export default defineContentScript({
     let cachedCurrencies: string[] = DEFAULT_CURRENCIES;
     let cachedCurrencySet = new Set(DEFAULT_CURRENCIES);
     let refreshPromise: Promise<void> | null = null;
-    const detectionCache = new WeakMap<Element, DetectedPrice[] | null>();
+
+    // Keyed on the element, but the text it held when we looked. Prices change
+    // in place on SPAs (Amazon variants, a site's own currency switcher), and a
+    // cache with no invalidation would keep serving the old amount.
+    interface CachedDetection {
+      text: string;
+      prices: DetectedPrice[];
+    }
+    const detectionCache = new WeakMap<Element, CachedDetection>();
 
     function setCachedCurrencies(next: string[] | undefined): void {
       cachedCurrencies = next?.length ? next : DEFAULT_CURRENCIES;
@@ -48,15 +57,13 @@ export default defineContentScript({
 
     async function fetchRatesDirect(): Promise<void> {
       try {
-        const res = await fetch('https://open.er-api.com/v6/latest/USD');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data.rates) return;
-        cachedRates = data.rates as ExchangeRates;
+        const rates = await fetchRates();
+        if (!rates) return;
+        cachedRates = rates;
         // Try to persist, but don't fail if storage is stubbed
         try {
           await chrome.storage.local.set({
-            [STORAGE.RATES]: data.rates,
+            [STORAGE.RATES]: rates,
             [STORAGE.RATES_TS]: Date.now(),
           });
         } catch { /* storage may be stubbed */ }
@@ -70,7 +77,8 @@ export default defineContentScript({
         refreshPromise = (async () => {
           try {
             const r = await chrome.storage.local.get([STORAGE.RATES, STORAGE.RATES_TS, STORAGE.CURRENCIES]);
-            if (r?.[STORAGE.RATES]) cachedRates = r[STORAGE.RATES] as ExchangeRates;
+            const stored = parseRates(r?.[STORAGE.RATES]);
+            if (stored) cachedRates = stored;
             if (r?.[STORAGE.CURRENCIES]) setCachedCurrencies(r[STORAGE.CURRENCIES] as string[]);
 
             // Fetch directly if storage had no rates or they're stale
@@ -90,6 +98,7 @@ export default defineContentScript({
     refreshCache();
 
     function hideTooltip(): void {
+      pendingTooltip = null;
       hideTooltipState();
     }
 
@@ -101,11 +110,13 @@ export default defineContentScript({
       const sourceRate = rates[detected.currencyCode];
       if (!sourceRate) return [];
 
+      if (!Number.isFinite(sourceRate) || sourceRate <= 0) return [];
+
       return targetCodes
         .filter((code) => code !== detected.currencyCode)
         .map((code) => {
           const targetRate = rates[code];
-          if (!targetRate) return null;
+          if (!targetRate || !Number.isFinite(targetRate) || targetRate <= 0) return null;
 
           const amount = detected.amount * (targetRate / sourceRate);
           const currency = CURRENCY_BY_CODE.get(code);
@@ -117,24 +128,35 @@ export default defineContentScript({
         .filter((c): c is ConvertedPrice => c !== null);
     }
 
+    // What the user asked to see while the rates were still loading, so the
+    // tooltip can appear on its own once they land instead of staying silent.
+    let pendingTooltip: { prices: DetectedPrice[]; x: number; y: number; yBottom: number } | null = null;
+
     function showTooltip(prices: DetectedPrice[], x: number, y: number, yBottom: number): void {
       if (!cachedRates) {
-        refreshCache();
+        pendingTooltip = { prices, x, y, yBottom };
+        refreshCache().then(() => {
+          const queued = pendingTooltip;
+          if (!queued || !cachedRates) return;
+          pendingTooltip = null;
+          showTooltip(queued.prices, queued.x, queued.y, queued.yBottom);
+        });
         return;
       }
 
+      pendingTooltip = null;
       const allConversions = prices.map((p) => convertPrice(p, cachedRates!, cachedCurrencies));
       showTooltipState({ sources: prices, allConversions, x, y, yBottom });
     }
 
     function detectPricesWithCache(element: Element): DetectedPrice[] {
-      if (detectionCache.has(element)) {
-        return detectionCache.get(element) ?? [];
-      }
+      const text = element.textContent ?? '';
+      const cached = detectionCache.get(element);
+      if (cached && cached.text === text) return cached.prices;
 
-      const detected = detectPricesFromElement(element);
-      detectionCache.set(element, detected.length ? detected : null);
-      return detected;
+      const prices = detectPricesFromElement(element);
+      detectionCache.set(element, { text, prices });
+      return prices;
     }
 
     // ── Multi-price hover state ──────────────────────────────────────────────
@@ -184,6 +206,12 @@ export default defineContentScript({
       return segments;
     }
 
+    function usableRects(rects: DOMRect[]): DOMRect[] {
+      return rects.filter(
+        (rect) => rect.width >= MIN_HITBOX_WIDTH && rect.height >= MIN_HITBOX_HEIGHT
+      );
+    }
+
     function buildHitboxes(element: Element, prices: DetectedPrice[]): PriceHitbox[] {
       const positionalPrices = prices.filter(
         (price): price is DetectedPrice & { matchStart: number; matchEnd: number; textSource: 'full' | 'direct' } =>
@@ -224,9 +252,7 @@ export default defineContentScript({
         range.setStart(startSegment.node, price.matchStart - startSegment.start);
         range.setEnd(endSegment.node, price.matchEnd - endSegment.start);
 
-        const rects = [...range.getClientRects()].filter(
-          (rect) => rect.width >= MIN_HITBOX_WIDTH && rect.height >= MIN_HITBOX_HEIGHT
-        );
+        const rects = usableRects([...range.getClientRects()]);
         if (rects.length) result.push({ price, rects });
         segmentIndex = endSegmentIndex;
       }
@@ -300,6 +326,16 @@ export default defineContentScript({
           // Always use hitbox approach: tooltip shows only when cursor is over price text
           activeElement = priceEl;
           priceHitboxes = buildHitboxes(priceEl, prices);
+
+          // Semantic detection (itemprop, data-price) reports a price with no
+          // offsets, so it produces no text range. Fall back to the element's
+          // own box, otherwise those prices would never show a tooltip at all.
+          // Regex matches always carry offsets, so they keep the tight hitbox.
+          if (!priceHitboxes.length && prices[0].matchStart === undefined) {
+            const rects = usableRects([...priceEl.getClientRects()]);
+            if (rects.length) priceHitboxes = [{ price: prices[0], rects }];
+          }
+
           document.addEventListener('mousemove', onMouseMove, { passive: true });
 
           // Show immediately if cursor is already over a price (entry position)
@@ -366,8 +402,9 @@ export default defineContentScript({
 
     const onStorageChanged: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, areaName) => {
       if (areaName !== 'local') return;
-      if (changes[STORAGE.RATES]?.newValue) {
-        cachedRates = changes[STORAGE.RATES].newValue as ExchangeRates;
+      if (changes[STORAGE.RATES]) {
+        const next = parseRates(changes[STORAGE.RATES].newValue);
+        if (next) cachedRates = next;
       }
       if (changes[STORAGE.CURRENCIES]) {
         setCachedCurrencies(changes[STORAGE.CURRENCIES].newValue as string[] | undefined);
@@ -376,7 +413,17 @@ export default defineContentScript({
 
     chrome.storage.onChanged.addListener(onStorageChanged);
 
-    window.addEventListener('unload', () => {
+    // 'pagehide' rather than the deprecated 'unload'. `persisted` means the page
+    // is only going into the back/forward cache and will come back with this
+    // script still loaded — tearing down there would kill the tooltip for the
+    // rest of that page's life.
+    window.addEventListener('pagehide', (event) => {
+      if (event.persisted) {
+        clearMultiHover();
+        hideTooltip();
+        return;
+      }
+
       document.removeEventListener('mouseover', onMouseOver);
       document.removeEventListener('mouseout', onMouseOut);
       document.removeEventListener('selectionchange', onSelectionChange);

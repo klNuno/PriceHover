@@ -1,146 +1,245 @@
 import type { DetectedPrice } from './types';
-import { CURRENCY_BY_CODE, SYMBOL_TO_CODE } from './currencies';
+import { CURRENCY_BY_CODE } from './currencies';
 
-// Multi-char symbols must come BEFORE single-char to win in alternation.
-const SYM =
-  // Multi-char dollar variants (longest first)
-  'COL\\$|CLP\\$|CDN\\$|NT\\$|Mex\\$|MX\\$|CA\\$|HK\\$|NZ\\$|A\\$|R\\$|S\\$|' +
-  // Other multi-char symbols
-  'S/\\.|\\$U|' +                               // PEN (S/.), UYU ($U)
-  'Rp|RM|SR|QR|KD|Fr|kr|zł|R|' +               // IDR, MYR, SAR, QAR, KWD, CHF, SEK/NOK/DKK(ambig), PLN, ZAR
-  // ISO 4217 codes
-  'USD|EUR|GBP|JPY|CAD|AUD|CHF|CNY|INR|KRW|' +
-  'BRL|MXN|SGD|HKD|NOK|SEK|DKK|PLN|CZK|HUF|' +
-  'RUB|TRY|ZAR|AED|SAR|NZD|THB|IDR|MYR|PHP|' +
-  'UAH|VND|KZT|ILS|CRC|UYU|PEN|KWD|QAR|TWD|NGN|' +
-  // Single-char symbols
-  '[$€£¥￥₹₩₦₱฿₺₽₴₫₸₪₡]';
+/**
+ * Where a currency token is allowed to sit relative to its amount.
+ *
+ * Matching is case-sensitive on purpose: with an `i` flag, ISO codes swallow
+ * ordinary English ("try 100 times" → TRY 100, "php 8.2" → PHP 8.2).
+ *
+ * `prefix` — token before the amount, with at most one space (`RM 5`).
+ * `suffix` — token after the amount, with at most one space (`199 kr`).
+ * `tight`  — prefix that must touch the digits (`R100`). Reserved for tokens so
+ *            short that the spaced form matches prose ("see section R 5").
+ */
+interface SymbolSpec {
+  token: string;
+  code: string;
+  prefix: boolean;
+  suffix: boolean;
+  tight: boolean;
+}
 
-// Two alternatives:
-// 1. Formatted with separators: 1,234.56 / 1.234,56 / 1 234,56
-// 2. Plain digit run: 746000 / 22000 (no internal separators — common in VND, IDR, KZT…)
+const both = (token: string, code: string): SymbolSpec =>
+  ({ token, code, prefix: true, suffix: true, tight: false });
+const prefixOnly = (token: string, code: string): SymbolSpec =>
+  ({ token, code, prefix: true, suffix: false, tight: false });
+const tightPrefix = (token: string, code: string): SymbolSpec =>
+  ({ token, code, prefix: false, suffix: false, tight: true });
+
+const SYMBOLS: SymbolSpec[] = [
+  // Sign symbols — unambiguous, allowed on either side.
+  both('$', 'USD'), both('€', 'EUR'), both('£', 'GBP'), both('¥', 'JPY'),
+  both('￥', 'JPY'), both('₹', 'INR'), both('₩', 'KRW'), both('₦', 'NGN'),
+  both('₱', 'PHP'), both('฿', 'THB'), both('₺', 'TRY'), both('₽', 'RUB'),
+  both('₴', 'UAH'), both('₫', 'VND'), both('₸', 'KZT'), both('₪', 'ILS'),
+  both('₡', 'CRC'), both('﷼', 'SAR'), both('د.إ', 'AED'),
+
+  // Qualified dollar and peso variants.
+  both('US$', 'USD'), both('COL$', 'COP'), both('CLP$', 'CLP'),
+  both('NT$', 'TWD'), both('CDN$', 'CAD'), both('Mex$', 'MXN'),
+  both('MX$', 'MXN'), both('CA$', 'CAD'), both('HK$', 'HKD'),
+  both('NZ$', 'NZD'), both('A$', 'AUD'), both('R$', 'BRL'),
+  both('S$', 'SGD'), both('$U', 'UYU'),
+
+  // Peru writes both forms.
+  both('S/.', 'PEN'), both('S/', 'PEN'),
+
+  // Alphabetic tokens that read as a currency only in front of the amount.
+  // As a suffix they would match "error code 500 KD" or "Version 5 RM".
+  prefixOnly('Rp', 'IDR'), prefixOnly('RM', 'MYR'), prefixOnly('SR', 'SAR'),
+  prefixOnly('QR', 'QAR'), prefixOnly('KD', 'KWD'),
+
+  // Alphabetic tokens genuinely written on both sides. The dotted forms are how
+  // Switzerland and Denmark actually print them: "Fr. 89.90", "199 kr."
+  both('Fr.', 'CHF'), both('Fr', 'CHF'),
+  both('kr.', 'SEK'), both('kr', 'SEK'), both('Kr', 'SEK'),
+  both('zł', 'PLN'), both('Kč', 'CZK'), both('Ft', 'HUF'),
+
+  // A bare R is South African rand only when glued to the digits.
+  tightPrefix('R', 'ZAR'),
+
+  // Every ISO 4217 code we support, uppercase only.
+  ...[...CURRENCY_BY_CODE.keys()].map((code) => both(code, code)),
+];
+
+export const SYMBOL_BY_TOKEN = new Map(SYMBOLS.map((s) => [s.token, s]));
+
+/**
+ * Space characters allowed beside or inside an amount. Newlines are excluded on
+ * purpose: a price never straddles two lines, but a paragraph break would let
+ * unrelated text join up into one match.
+ */
+const SPACE_CLASS = ' \\u00A0\\u202F\\u2009';
+const SPACE = `[${SPACE_CLASS}]`;
+const GROUP_SEP = `[,.${SPACE_CLASS}]`;
+
+/**
+ * Three shapes, tried in order:
+ * 1. Indian grouping — 1,49,900 / 12,34,567.89 (two-digit groups above the
+ *    first thousand). Must come first: the western pattern would match only
+ *    the leading digit and the boundary lookahead would then reject the lot.
+ * 2. western grouping — 1,234.56 / 1.234,56 / 1 234,56
+ * 3. plain digit run — 746000 / 22000 (common in VND, IDR, KZT…)
+ *
+ * Up to three decimals so KWD and friends survive; the boundary lookahead
+ * below rejects anything longer instead of silently truncating it.
+ */
 const AMOUNT =
-  '(?:[\\d]{1,3}(?:[,\\.\\s]\\d{3}){1,5}(?:[,\\.]\\d{1,2})?|[\\d]+(?:[,\\.]\\d{1,2})?)';
+  '(?:' +
+  `\\d{1,2}(?:,\\d{2})+,\\d{3}(?:\\.\\d{1,2})?` +
+  `|\\d{1,3}(?:${GROUP_SEP}\\d{3}){1,5}(?:[,.]\\d{1,2})?` +
+  `|\\d+(?:[,.]\\d{1,3})?` +
+  ')';
 
-const PRICE_REGEX = new RegExp(
-  `(?:(${SYM})\\s*(${AMOUNT})|(${AMOUNT})\\s*(${SYM}))`,
-  'i'
-);
-const GLOBAL_PRICE_REGEX = new RegExp(PRICE_REGEX.source, 'gi');
+function escapeToken(token: string): string {
+  // No `/` here: under the `u` flag `\/` is an invalid identity escape.
+  return token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-const ISO_CODES = new Set(CURRENCY_BY_CODE.keys());
+/** Longest first, so `SAR` wins over `SR` and `R$` over `R`. */
+function alternation(specs: SymbolSpec[]): string {
+  return specs
+    .map((s) => s.token)
+    .sort((a, b) => b.length - a.length)
+    .map(escapeToken)
+    .join('|');
+}
+
+const TIGHT_ALT = alternation(SYMBOLS.filter((s) => s.tight));
+const PREFIX_ALT = alternation(SYMBOLS.filter((s) => s.prefix));
+const SUFFIX_ALT = alternation(SYMBOLS.filter((s) => s.suffix));
+
+// Group layout: 1=tight token, 2=amount | 3=prefix token, 4=amount
+//               5=amount, 6=suffix token
+//
+// Leading lookbehinds keep a match from starting mid-token. The amount-first
+// branch also refuses a leading `.` or `,` so "1.2345 USD" cannot be salvaged
+// as "2345 USD". The trailing lookahead refuses a truncated amount, so
+// "€1234.5678" yields nothing rather than a wrong €1234.56.
+const PRICE_SOURCE =
+  `(?:(?<![\\p{L}\\d])(${TIGHT_ALT})(${AMOUNT})` +
+  `|(?<![\\p{L}\\d])(${PREFIX_ALT})${SPACE}?(${AMOUNT})` +
+  `|(?<![\\p{L}\\d.,])(${AMOUNT})${SPACE}?(${SUFFIX_ALT}))` +
+  `(?![\\p{L}\\d])(?![.,]\\d)`;
+
+const PRICE_REGEX = new RegExp(PRICE_SOURCE, 'u');
+const GLOBAL_PRICE_REGEX = new RegExp(PRICE_SOURCE, 'gu');
+
 const LETTER_REGEX = /\p{L}/u;
+const STRIPPABLE_SPACE = new RegExp(`[${SPACE_CLASS}]`, 'g');
 
-function normalizeAmount(raw: string): number {
-  let s = raw.replace(/\s/g, '');
+/** Currencies whose minor unit is three digits, so `1.234` really is 1.234. */
+const THREE_DECIMAL_CURRENCIES = new Set(['KWD', 'BHD', 'OMR', 'JOD', 'TND']);
 
+export function normalizeAmount(raw: string, code: string): number {
+  const s = raw.replace(STRIPPABLE_SPACE, '');
   const lastComma = s.lastIndexOf(',');
   const lastDot = s.lastIndexOf('.');
 
-  if (lastComma > lastDot) {
-    const digitsAfter = s.length - lastComma - 1;
-    if (digitsAfter === 3) {
-      s = s.replace(/,/g, '');           // 3,500 → 3500
-    } else {
-      s = s.replace(/\./g, '').replace(',', '.'); // 12,99 → 12.99
-    }
-  } else if (lastDot > lastComma) {
-    const digitsAfter = s.length - lastDot - 1;
-    if (digitsAfter === 3) {
-      s = s.replace(/\./g, '');          // 3.500 → 3500
-    } else {
-      s = s.replace(/,/g, '');           // 12.99 → 12.99
-    }
+  if (lastComma === -1 && lastDot === -1) return parseFloat(s);
+
+  // Both separators present: the rightmost one is the decimal point, unless it
+  // is followed by three digits — then both are thousands separators.
+  if (lastComma !== -1 && lastDot !== -1) {
+    const decimalIndex = Math.max(lastComma, lastDot);
+    if (s.length - decimalIndex - 1 === 3) return parseFloat(s.replace(/[,.]/g, ''));
+    const integerPart = s.slice(0, decimalIndex).replace(/[,.]/g, '');
+    return parseFloat(`${integerPart}.${s.slice(decimalIndex + 1)}`);
   }
 
-  return parseFloat(s);
-}
+  // A single kind of separator. Repeated means grouping (1.234.567). Otherwise
+  // the digit count decides: three digits is a thousands separator (3,500 →
+  // 3500) for every currency that does not use three decimals.
+  const separator = lastComma !== -1 ? ',' : '.';
+  const separatorCount = s.split(separator).length - 1;
+  const digitsAfter = s.length - Math.max(lastComma, lastDot) - 1;
 
-function symbolToCode(symbol: string): string | null {
-  const upper = symbol.toUpperCase();
-  if (ISO_CODES.has(upper)) return upper;
-  return SYMBOL_TO_CODE[symbol] ?? SYMBOL_TO_CODE[upper] ?? null;
-}
-
-function isTokenBoundarySafe(input: string, token: string, matchIndex: number, matchedText: string): boolean {
-  if (/[\r\n]/.test(matchedText)) return false;
-  if (!LETTER_REGEX.test(token)) return true;
-
-  const tokenOffset = matchedText.indexOf(token);
-  if (tokenOffset === -1) return false;
-
-  const tokenStart = matchIndex + tokenOffset;
-  const tokenEnd = tokenStart + token.length;
-  const previous = tokenStart > 0 ? input[tokenStart - 1] : '';
-  const next = tokenEnd < input.length ? input[tokenEnd] : '';
-
-  return !LETTER_REGEX.test(previous) && !LETTER_REGEX.test(next);
-}
-
-function trySemanticDetection(element: Element): DetectedPrice | null {
-  let el: Element | null = element;
-  let amount: number | null = null;
-  let currencyCode: string | null = null;
-
-  for (let depth = 0; depth < 6 && el; depth++, el = el.parentElement) {
-    if (el.hasAttribute('itemprop')) {
-      const prop = el.getAttribute('itemprop');
-      if (prop === 'price') {
-        const content = el.getAttribute('content') ?? el.textContent ?? '';
-        const parsed = parseFloat(content.replace(/[^\d.]/g, ''));
-        if (!isNaN(parsed)) amount = parsed;
-      }
-      if (prop === 'priceCurrency') {
-        const content = el.getAttribute('content') ?? el.textContent ?? '';
-        currencyCode = content.trim().toUpperCase();
-      }
-    }
-    if (el.hasAttribute('data-price') && amount === null) {
-      const dataPrice = el.getAttribute('data-price');
-      if (dataPrice) {
-        const parsed = parseFloat(dataPrice);
-        if (!isNaN(parsed)) amount = parsed;
-      }
-    }
-    if (el.hasAttribute('data-currency') && currencyCode === null) {
-      const dataCurrency = el.getAttribute('data-currency');
-      if (dataCurrency) currencyCode = dataCurrency.trim().toUpperCase();
-    }
-    if (amount !== null && currencyCode !== null) return { amount, currencyCode };
+  if (separatorCount > 1) return parseFloat(s.split(separator).join(''));
+  if (digitsAfter === 3 && !THREE_DECIMAL_CURRENCIES.has(code)) {
+    return parseFloat(s.split(separator).join(''));
   }
-
-  return null;
+  return parseFloat(s.replace(separator, '.'));
 }
 
 function parseMatch(match: RegExpExecArray, textSource?: 'full' | 'direct'): DetectedPrice | null {
-  let symbolOrCode: string;
+  let token: string;
   let rawAmount: string;
 
-  if (match[1] && match[2]) {
-    symbolOrCode = match[1];
+  if (match[1]) {
+    token = match[1];
     rawAmount = match[2];
-  } else if (match[3] && match[4]) {
-    rawAmount = match[3];
-    symbolOrCode = match[4];
+  } else if (match[3]) {
+    token = match[3];
+    rawAmount = match[4];
+  } else if (match[6]) {
+    token = match[6];
+    rawAmount = match[5];
   } else {
     return null;
   }
 
-  const currencyCode = symbolToCode(symbolOrCode);
-  if (!currencyCode) return null;
-  if (!isTokenBoundarySafe(match.input, symbolOrCode, match.index, match[0])) return null;
+  const spec = SYMBOL_BY_TOKEN.get(token);
+  if (!spec) return null;
 
-  const amount = normalizeAmount(rawAmount);
-  if (isNaN(amount) || amount <= 0) return null;
+  // A single fraction digit reads as a version or a measurement far more often
+  // than as a price, and alphabetic tokens are the ones that collide with
+  // prose: "PHP 8.2", "Fr 20.5". Sign symbols keep the loose rule.
+  if (LETTER_REGEX.test(token) && /[.,]\d$/.test(rawAmount)) return null;
+
+  const amount = normalizeAmount(rawAmount, spec.code);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
 
   return {
     amount,
-    currencyCode,
+    currencyCode: spec.code,
     matchedText: match[0],
     matchStart: match.index,
     matchEnd: match.index + match[0].length,
     textSource,
   };
+}
+
+/** Reads schema.org and data-* annotations, which beat any regex when present. */
+function trySemanticDetection(element: Element): DetectedPrice | null {
+  let el: Element | null = element;
+  let rawAmount: string | null = null;
+  let currencyCode: string | null = null;
+
+  const readAttr = (target: Element): string =>
+    (target.getAttribute('content') ?? target.textContent ?? '').trim();
+
+  for (let depth = 0; depth < 6 && el; depth++, el = el.parentElement) {
+    if (el.hasAttribute('itemprop')) {
+      const prop = el.getAttribute('itemprop');
+      if (prop === 'price' && rawAmount === null) {
+        const cleaned = readAttr(el).replace(/[^\d.,]/g, '');
+        if (cleaned) rawAmount = cleaned;
+      }
+      if (prop === 'priceCurrency' && currencyCode === null) {
+        currencyCode = readAttr(el).toUpperCase();
+      }
+    }
+    if (el.hasAttribute('data-price') && rawAmount === null) {
+      const cleaned = (el.getAttribute('data-price') ?? '').replace(/[^\d.,]/g, '');
+      if (cleaned) rawAmount = cleaned;
+    }
+    if (el.hasAttribute('data-currency') && currencyCode === null) {
+      const value = el.getAttribute('data-currency');
+      if (value) currencyCode = value.trim().toUpperCase();
+    }
+
+    if (rawAmount !== null && currencyCode !== null) break;
+  }
+
+  // A currency we cannot convert (loyalty points, "CREDITS") is not a price.
+  if (rawAmount === null || currencyCode === null) return null;
+  if (!CURRENCY_BY_CODE.has(currencyCode)) return null;
+
+  const amount = normalizeAmount(rawAmount, currencyCode);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  return { amount, currencyCode };
 }
 
 function tryRegexDetection(text: string): DetectedPrice | null {
@@ -156,6 +255,8 @@ function tryRegexDetectionAll(text: string, textSource: 'full' | 'direct'): Dete
   while ((match = GLOBAL_PRICE_REGEX.exec(text)) !== null) {
     const price = parseMatch(match, textSource);
     if (price) results.push(price);
+    // A zero-length match cannot happen here, but guard the loop anyway.
+    if (GLOBAL_PRICE_REGEX.lastIndex === match.index) GLOBAL_PRICE_REGEX.lastIndex++;
   }
   return results;
 }
@@ -200,4 +301,9 @@ export function detectPriceFromText(text: string): DetectedPrice | null {
   } catch {
     return null;
   }
+}
+
+/** Exposed for tests: the exact text a detector run would match. */
+export function detectAllFromText(text: string): DetectedPrice[] {
+  return tryRegexDetectionAll(text, 'full');
 }

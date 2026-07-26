@@ -1,7 +1,8 @@
 {
   "name": "pricehover",
-  "version": "1.2.3",
+  "version": "1.3.0",
   "description": "Browser extension that converts prices on hover",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "wxt",
@@ -9,6 +10,10 @@
     "build:firefox": "wxt build --browser firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip --browser firefox",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "icons": "bun run scripts/gen-icons.ts",
+    "flags": "bun run scripts/gen-flags.ts",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
@@ -16,9 +21,9 @@
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
-    "@tailwindcss/vite": "^4.0.0",
+    "@types/bun": "^1.1.0",
+    "@types/chrome": "^0.2.2",
     "@wxt-dev/module-svelte": "^2.0.0",
-    "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0",
     "wxt": "^0.20.0"
   }

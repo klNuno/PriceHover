@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { CURRENCIES, CURRENCY_BY_CODE, flagToCountryCode } from '../../src/currencies';
+  import { flagImage } from '../../src/flags';
   import { STORAGE, DEFAULT_CURRENCIES } from '../../src/types';
   import { detectPriceFromText } from '../../src/detector';
   import { formatCurrencyAmount } from '../../src/formatter';
-  import type { DetectedPrice } from '../../src/types';
+  import { parseRates } from '../../src/rates';
+  import type { DetectedPrice, ExchangeRates } from '../../src/types';
 
   interface TargetedConversionQuery {
     source: DetectedPrice;
@@ -80,14 +82,20 @@
   }
 
   let selectedCodes = $state<string[]>(DEFAULT_CURRENCIES);
-  let rates = $state<Record<string, number> | null>(null);
+  let rates = $state<ExchangeRates | null>(null);
   let searchQuery = $state('');
 
   let err = $state('');
 
+  // Shown in the header. Read from the manifest so it can never drift.
+  const version = chrome.runtime.getManifest().version;
+
   function storageGet(keys: string[]): Promise<Record<string, unknown>> {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(keys, (r) => resolve(r ?? {}));
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.get(keys, (r) => {
+        if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+        else resolve(r ?? {});
+      });
     });
   }
 
@@ -104,7 +112,7 @@
     try {
       const r = await storageGet([STORAGE.CURRENCIES, STORAGE.RATES]);
       if (r[STORAGE.CURRENCIES]) selectedCodes = r[STORAGE.CURRENCIES] as string[];
-      if (r[STORAGE.RATES]) rates = r[STORAGE.RATES] as Record<string, number>;
+      rates = parseRates(r[STORAGE.RATES]);
     } catch (e) { err = `load: ${e}`; }
   });
 
@@ -174,7 +182,7 @@
 <div class="popup">
   <header class="header">
     <span class="title">PriceHover</span>
-    <span class="version">v1.2.3</span>
+    <span class="version">v{version}</span>
     <span class="count">{selectedCodes.length} selected</span>
   </header>
 
@@ -192,6 +200,7 @@
     {#each visibleCurrencies as currency (currency.code)}
       {@const selected = selectedCodes.includes(currency.code)}
       {@const converted = conversionMap.get(currency.code)}
+      {@const flagSrc = flagImage(flagToCountryCode(currency.flag))}
       <li>
         <label class="row" class:selected={selected && !isCalcMode} class:has-value={!!converted}>
           <input
@@ -200,7 +209,11 @@
             checked={selected}
             onchange={() => toggleCurrency(currency.code)}
           />
-          <img class="flag" src="https://flagcdn.com/20x15/{flagToCountryCode(currency.flag)}.png" alt="" onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; (t.nextElementSibling as HTMLElement).style.display = 'inline'; }} /><span class="flag-fb" style="display:none">{currency.flag}</span>
+          {#if flagSrc}
+            <img class="flag" src={flagSrc} alt="" />
+          {:else}
+            <span class="flag-fb">{currency.flag}</span>
+          {/if}
           <span class="code">{currency.code}</span>
           <span class="name">{currency.name}</span>
           <span class="right">

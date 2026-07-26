@@ -1,16 +1,21 @@
 <script lang="ts">
   import { flagToCountryCode } from './currencies';
+  import { flagImage } from './flags';
   import { formatCurrencyAmount } from './formatter';
   import { tooltipState } from './tooltip-state';
 
   // Pivot allConversions (per-source arrays) into per-target-currency rows.
   const rows = $derived.by(() => {
     const { allConversions } = $tooltipState;
-    const map = new Map<string, { flag: string; amounts: string[] }>();
+    const map = new Map<string, { flag: string; flagSrc: string; amounts: string[] }>();
     for (const convList of allConversions) {
       for (const conv of convList) {
         if (!map.has(conv.currency.code)) {
-          map.set(conv.currency.code, { flag: conv.currency.flag, amounts: [] });
+          map.set(conv.currency.code, {
+            flag: conv.currency.flag,
+            flagSrc: flagImage(flagToCountryCode(conv.currency.flag)),
+            amounts: [],
+          });
         }
         map.get(conv.currency.code)!.amounts.push(conv.formatted);
       }
@@ -65,12 +70,11 @@
       <ul class="ph-list">
         {#each rows as row (row.code)}
           <li class="ph-item">
-            <img
-              class="ph-flag"
-              src="https://flagcdn.com/20x15/{flagToCountryCode(row.flag)}.png"
-              alt=""
-              onerror={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none'; (t.nextElementSibling as HTMLElement).style.display = ''; }}
-            /><span class="ph-flag-fb" style="display:none">{row.flag}</span>
+            {#if row.flagSrc}
+              <img class="ph-flag" src={row.flagSrc} alt="" />
+            {:else}
+              <span class="ph-flag-fb">{row.flag}</span>
+            {/if}
             <span class="ph-item-code">{row.code}</span>
             {#each row.amounts as amt}
               <span class="ph-item-amount">{amt}</span>
