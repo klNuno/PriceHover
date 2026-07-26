@@ -111,22 +111,28 @@
   /**
    * The synchronous route, tried first.
    *
-   * A content script runs in the page's permission context, and
-   * `navigator.clipboard.writeText` there can neither resolve nor reject — it
-   * simply hangs, which is what it did throughout testing. A hung promise the
-   * handler awaits means the user clicks and nothing ever happens, with no
-   * error anywhere. `execCommand` is deprecated and dependable; it is only
-   * asked for what it can answer synchronously.
+   * `execCommand` is deprecated and answers immediately with a boolean this
+   * code can act on. `navigator.clipboard.writeText` runs in the page's
+   * permission context and was observed neither resolving nor rejecting there,
+   * so it is kept only as a fallback, and only raced against a timeout.
    */
   function copyViaSelection(text: string): boolean {
     const scratch = document.createElement('textarea');
     scratch.value = text;
     scratch.setAttribute('readonly', '');
-    scratch.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    // Off-screen, not invisible. A textarea at 1px with `opacity: 0` cannot be
+    // reliably selected — the copy silently returned false about half the time.
+    // Parked to the left at the current scroll offset, it never flashes and it
+    // never fails.
+    scratch.style.cssText =
+      `position:absolute;left:-9999px;top:${window.scrollY}px;` +
+      'width:2em;height:2em;padding:0;border:0;margin:0;outline:0;box-shadow:none;background:transparent;';
     document.body.appendChild(scratch);
 
     const previous = document.activeElement as HTMLElement | null;
-    scratch.select();
+    scratch.focus({ preventScroll: true });
+    scratch.setSelectionRange(0, text.length);
+
     let ok = false;
     try { ok = document.execCommand('copy'); } catch { ok = false; }
     scratch.remove();
@@ -139,6 +145,9 @@
     let ok = copyViaSelection(text);
 
     if (!ok && navigator.clipboard) {
+      // Raced, never plainly awaited: a clipboard promise that settles neither
+      // way is a real state this API gets into, and awaiting one means the user
+      // clicks and nothing ever happens — no copy, no error, no console entry.
       ok = await Promise.race([
         navigator.clipboard.writeText(text).then(() => true, () => false),
         new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 500)),

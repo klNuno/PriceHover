@@ -149,7 +149,11 @@
     </div>
   {/if}
 
+  <!-- Two explicit columns rather than an auto-fit grid: the currency picker is
+       twice the height of anything else, and letting the browser place cards
+       left a column-tall hole under Behaviour. -->
   <div class="columns">
+    <div class="col">
     <section>
       <h2>{t('sectionCurrencies')}</h2>
 
@@ -222,6 +226,32 @@
     </section>
 
     <section>
+      <h2>{t('sectionSites')}</h2>
+      <span class="label">{t('pausedSites')}</span>
+      <ul class="sites">
+        {#each settings.disabledSites as host (host)}
+          <li>
+            <span class="host">{host}</span>
+            <button class="icon" type="button" title={t('remove')} onclick={() => resumeSite(host)}>✕</button>
+          </li>
+        {:else}
+          <li class="muted">{t('pausedSitesEmpty')}</li>
+        {/each}
+      </ul>
+      <form class="add-site" onsubmit={(e) => { e.preventDefault(); pauseSite(); }}>
+        <input
+          type="text"
+          placeholder={t('addSitePlaceholder')}
+          aria-label={t('pausedSites')}
+          bind:value={addSite}
+        />
+        <button type="submit">{t('add')}</button>
+      </form>
+    </section>
+    </div>
+
+    <div class="col">
+    <section>
       <h2>{t('sectionBehaviour')}</h2>
 
       <label class="switch">
@@ -275,30 +305,6 @@
     </section>
 
     <section>
-      <h2>{t('sectionSites')}</h2>
-      <span class="label">{t('pausedSites')}</span>
-      <ul class="sites">
-        {#each settings.disabledSites as host (host)}
-          <li>
-            <span class="host">{host}</span>
-            <button class="icon" type="button" title={t('remove')} onclick={() => resumeSite(host)}>✕</button>
-          </li>
-        {:else}
-          <li class="muted">{t('pausedSitesEmpty')}</li>
-        {/each}
-      </ul>
-      <form class="add-site" onsubmit={(e) => { e.preventDefault(); pauseSite(); }}>
-        <input
-          type="text"
-          placeholder={t('addSitePlaceholder')}
-          aria-label={t('pausedSites')}
-          bind:value={addSite}
-        />
-        <button type="submit">{t('add')}</button>
-      </form>
-    </section>
-
-    <section>
       <h2>{t('sectionAbout')}</h2>
       <div class="rates-row">
         <span class:warn={stale}>{ratesLabel}</span>
@@ -314,6 +320,7 @@
       </p>
       <button class="danger" type="button" onclick={reset}>{t('reset')}</button>
     </section>
+    </div>
   </div>
 
   {#if error}<div class="err">{error}</div>{/if}
@@ -373,7 +380,8 @@
   .welcome p { font-size: 13px; color: var(--fg2); }
   .welcome button { margin-left: auto; }
 
-  .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; align-items: start; }
+  .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 18px; }
 
   section {
     border: 1px solid var(--border);

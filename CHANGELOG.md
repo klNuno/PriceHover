@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.4.0
+## 2.0.0
+
+The major bump is for the reading change, not the feature list: a `$` price on
+a country domain now converts as that country's dollar. Anyone who preferred
+the old behaviour can restore it under Behaviour → *Read `$`, `kr` and `¥` from
+the site's country*. Settings from 1.x are migrated on first run; the old flat
+currency list becomes your base currency plus targets, in the order it was in.
 
 ### Correctness
 
