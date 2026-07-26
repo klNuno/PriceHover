@@ -62,7 +62,7 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
   const inserted = new Set<HTMLElement>();
   /**
    * Text a node held when it was last annotated. A node reaches the queue more
-   * than once — a mutation record and a rescan can both name it — and without
+   * than once (a mutation record and a rescan can both name it) and without
    * this it would collect a second copy of every badge. Unchanged text means
    * there is nothing left to do; changed text means the old badges are wrong
    * and have to come off first.
@@ -76,7 +76,7 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
 
   /**
    * Mutation records are delivered as a microtask, long after `writing` has
-   * gone back to false — so the flag alone does not keep our own edits out.
+   * gone back to false, so the flag alone does not keep our own edits out.
    * `splitText` in particular queues a characterData record on the node we just
    * annotated, which came straight back in and annotated it a second time.
    * Taking and discarding the records while still holding the flag is what

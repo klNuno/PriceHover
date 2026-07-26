@@ -2,13 +2,13 @@ import { CURRENCY_BY_CODE } from './currencies';
 
 /**
  * A handful of currency tokens are shared by several countries. Read literally,
- * they produce a confidently wrong conversion — `$49` on amazon.ca became
+ * they produce a confidently wrong conversion. `$49` on amazon.ca became
  * 49 USD, `1 099 kr` on a Norwegian shop became SEK. That is worse than showing
  * nothing, because the user has no way to tell it happened.
  *
  * The page itself carries the answer: a ccTLD is chosen for a market, and a
- * region subtag in `<html lang>` says which one. Neither needs a permission —
- * the content script already runs in that page.
+ * region subtag in `<html lang>` says which one. Neither needs a permission,
+ * since the content script already runs in that page.
  */
 
 /** Token families that mean different currencies in different places. */
@@ -34,7 +34,7 @@ const REGION_CURRENCY: Record<string, Record<string, string>> = {
 
 /**
  * ccTLDs trusted as a market signal. Deliberately excludes the ones sold as
- * generic vanity domains — `.co`, `.io`, `.me`, `.ai`, `.tv`, `.to`, `.cc` —
+ * generic vanity domains (`.co`, `.io`, `.me`, `.ai`, `.tv`, `.to`, `.cc`),
  * where the country has nothing to do with the site.
  */
 const MARKET_CCTLD = new Set([

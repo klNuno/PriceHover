@@ -354,14 +354,20 @@ export default defineContentScript({
       // Inside the element we already armed: mousemove owns the decision.
       if (activeElement && (target === activeElement || activeElement.contains(target))) return;
 
+      // Crossing the gap towards the tooltip. The pointer leaves the price and
+      // passes over its container, whose mouseover would otherwise clear the
+      // hover and take the tooltip away before it can be clicked. mousemove and
+      // mouseout already make that exception; this is the third way in.
+      if (activeIndex !== -1 && withinCard(e.clientX, e.clientY)) return;
+
       if (hoverTimer !== null) clearTimeout(hoverTimer);
       if (activeElement) clearHover();
 
       const { clientX: x, clientY: y } = e;
       lastPointer = { x, y };
 
-      // Hover intent. Everything expensive — textContent, the regex, building
-      // ranges — happens here and nowhere else, so sweeping the pointer across
+      // Hover intent. Everything expensive (textContent, the regex, building
+      // ranges) happens here and nowhere else, so sweeping the pointer across
       // a page of prices costs nothing at all.
       const delay = settings.hoverDelayMs;
       if (delay <= 0) { arm(target, x, y); return; }
@@ -401,7 +407,11 @@ export default defineContentScript({
       const related = e.relatedTarget as Element | null;
       // Moving onto the tooltip itself, or deeper into the armed element.
       if (related && (related === host || (activeElement && activeElement.contains(related)))) return;
-      if (related && withinCard(lastPointer.x, lastPointer.y)) return;
+      // Where the pointer went, not where it was. mouseout fires before the
+      // mousemove that updates lastPointer, so the old reading was still inside
+      // the price: a pointer moving fast enough to clear the gap in one sample
+      // lost the tooltip on the way to clicking it.
+      if (related && withinCard(e.clientX, e.clientY)) return;
 
       clearHover();
       hide();

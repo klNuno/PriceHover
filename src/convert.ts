@@ -10,7 +10,7 @@ function usableRate(rates: ExchangeRates, code: string): number | null {
 
 /**
  * Converts one detected price into every requested currency, keeping the order
- * it was given — the caller puts the user's own currency first, and the tooltip
+ * it was given. The caller puts the user's own currency first, and the tooltip
  * relies on that to know which row to emphasise.
  */
 export function convertPrice(

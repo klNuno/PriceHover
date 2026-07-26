@@ -12,7 +12,7 @@ export function t(key: string, substitutions?: Substitutions): string {
     const value = chrome.i18n.getMessage(key, substitutions);
     if (value) return value;
   } catch {
-    // No extension runtime — tests, or a stubbed environment.
+    // No extension runtime: tests, or a stubbed environment.
   }
   return key;
 }

@@ -10,7 +10,7 @@ currency list becomes your base currency plus targets, in the order it was in.
 
 ### Correctness
 
-- `$` no longer always means US dollars. On a country domain, or a page whose `lang` names a region, `$`, `kr` and `¥` are read as the local currency — `$49` on a `.ca` site is Canadian, `1 099 kr` on a `.no` site is Norwegian, `¥` on a `.cn` site is yuan. The tooltip says when it made that call. This was the one thing the extension got confidently, silently wrong. Switch it off under Behaviour if you prefer the old reading.
+- `$` no longer always means US dollars. On a country domain, or a page whose `lang` names a region, `$`, `kr` and `¥` are read as the local currency. `$49` on a `.ca` site is Canadian, `1 099 kr` on a `.no` site is Norwegian, `¥` on a `.cn` site is yuan. The tooltip says when it made that call. This was the one thing the extension got confidently, silently wrong. Switch it off under Behaviour if you prefer the old reading.
 - Vanity ccTLDs (`.co`, `.io`, `.ai`, `.me`, `.tv`, `.to`) are deliberately not treated as country signals.
 - Price ranges are understood: `€10 – €20`, `€10-20` and `10-20 kr` convert as one range instead of one price, or none. `€10-20% off` is still a single price.
 - Every currency now rounds to its own minor unit. `KWD 12.500` was truncated to two decimals because the formatter hardcoded a cap for everything but JPY and KRW.
@@ -18,9 +18,9 @@ currency list becomes your base currency plus targets, in the order it was in.
 
 ### Interface
 
-- A hover delay, 180 ms by default. Sweeping the pointer across a page of prices no longer flashes a tooltip on every one of them — and does no detection work either.
+- A hover delay, 180 ms by default. Sweeping the pointer across a page of prices no longer flashes a tooltip on every one of them, and does no detection work either.
 - Scrolling moves the tooltip with the price instead of dismissing it. A nudge of the wheel used to hide it until you left the element and came back.
-- The tooltip can be clicked: a click on any row copies the amount.
+- The tooltip can be clicked: a click on any row copies the amount. Reaching it works at any pointer speed. The gap between the price and the card was checked against the pointer's previous position, so a hand that crossed it in one movement lost the tooltip on the way.
 - Your own currency is an explicit setting now, shown first in the tooltip and never converted away from. The popup lists your chosen currencies before the other forty.
 - The tooltip flips below a price only when it actually fits below. It used to flip whenever it did not fit above, and clip off the bottom of the screen.
 - Keyboard focus is visible in the popup. The checkbox is a clipped pixel for screen readers, and nothing drew a ring for it, so tabbing through the list showed nothing at all.
@@ -31,7 +31,7 @@ currency list becomes your base currency plus targets, in the order it was in.
 ### Features
 
 - A master switch and a per-site pause, both reachable from the popup. A misfire on one site no longer means uninstalling.
-- Inline mode: PriceHover can write your currency beside every price on the page instead of waiting for a hover. It only ever appends — the site's own text is never rewritten — and it skips editable fields, `code`, `pre` and anything machine-read.
+- Inline mode: PriceHover can write your currency beside every price on the page instead of waiting for a hover. It only ever appends (the site's own text is never rewritten) and it skips editable fields, `code`, `pre` and anything machine-read.
 - A full options page: currencies with drag-free reordering, behaviour, paused sites, rates and privacy.
 - Translated into English, French, Spanish, German, Brazilian Portuguese, Italian, Japanese and Simplified Chinese. Amounts are formatted in the browser's language too.
 
@@ -49,7 +49,7 @@ currency list becomes your base currency plus targets, in the order it was in.
 
 ### License
 
-- Relicensed from MIT to **GPL-3.0-or-later**. A fork that gets distributed — published to a store included — now has to release its source under the same terms. Every dependency is GPL-compatible, and only Svelte (MIT) ships inside the extension.
+- Relicensed from MIT to **GPL-3.0-or-later**. A fork that gets distributed, published to a store included, now has to release its source under the same terms. Every dependency is GPL-compatible, and only Svelte (MIT) ships inside the extension.
 
 ## 1.3.0
 
@@ -82,5 +82,5 @@ currency list becomes your base currency plus targets, in the order it was in.
 - Unit tests for the detector and the rate parser, run in CI along with a typecheck. There were none.
 - `tsc --noEmit` passes. It never did: `@types/chrome` was missing and `wxt.config.ts` still set `extensionApi`, removed in WXT 0.20.
 - The version lives in `package.json` only. It used to be spread across `package.json`, `wxt.config.ts` and the popup markup, with all three disagreeing.
-- The release workflow no longer submits to the Chrome Web Store or AMO — both are published by hand. It pins every action to a commit SHA, installs with a frozen lockfile, and refuses to release when the tag and `package.json` disagree.
+- The release workflow no longer submits to the Chrome Web Store or AMO, since both are published by hand. It pins every action to a commit SHA, installs with a frozen lockfile, and refuses to release when the tag and `package.json` disagree.
 - Dropped `tailwindcss` and `@tailwindcss/vite`, unused anywhere in the codebase.

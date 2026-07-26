@@ -4,11 +4,11 @@ import { STORAGE, DEFAULT_CURRENCIES } from './types';
 /**
  * How converted amounts are rounded before display.
  *
- * `exact`  — whatever the currency's minor unit calls for ($39.36, ¥1235).
- * `smart`  — fewer digits as the amount grows, prefixed with `≈` whenever the
+ * `exact`:   whatever the currency's minor unit calls for ($39.36, ¥1235).
+ * `smart`:   fewer digits as the amount grows, prefixed with `≈` whenever the
  *            rounding actually moved the number. A conversion is an estimate;
  *            two decimals on a 4-digit amount pretend otherwise.
- * `integer`— never any decimals.
+ * `integer`: never any decimals.
  */
 export type Rounding = 'exact' | 'smart' | 'integer';
 
@@ -77,7 +77,7 @@ function validCodeList(value: unknown): string[] {
 /**
  * Accepts anything and returns something usable. Storage is written by older
  * builds of this extension and, in the popup's case, by a user editing it in
- * devtools — neither is a reason to end up with `undefined.length`.
+ * devtools. Neither is a reason to end up with `undefined.length`.
  */
 export function parseSettings(raw: unknown): Settings {
   const input = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -134,14 +134,14 @@ export async function loadSettings(): Promise<Settings> {
       return migrated;
     }
   } catch {
-    // Storage can be stubbed (some extension wrappers) — defaults still work.
+    // Storage can be stubbed (some extension wrappers) and defaults still work.
   }
   return { ...DEFAULT_SETTINGS, targetCurrencies: DEFAULT_CURRENCIES.filter((c) => c !== DEFAULT_SETTINGS.baseCurrency) };
 }
 
 /**
  * Svelte 5 wraps `$state` arrays in a Proxy, and `chrome.storage` serialises a
- * proxied array as a plain **object** — `{"0":"JPY","1":"USD"}`. Reading it back
+ * proxied array as a plain **object**, `{"0":"JPY","1":"USD"}`. Reading it back
  * then fails `Array.isArray`, so the target list silently reverted to the
  * defaults and every paused site disappeared on the next page load. Spreading
  * produces a real array and costs nothing.

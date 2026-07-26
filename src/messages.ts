@@ -1,6 +1,6 @@
 /**
  * The content script cannot open the options page or force a rate refresh on
- * its own — both live in the background. Two message types, both fire-and-
+ * its own, since both live in the background. Two message types, both fire-and-
  * forget, both safe to fail silently when the worker is asleep.
  */
 export const MESSAGE = {

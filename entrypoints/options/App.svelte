@@ -166,7 +166,7 @@
           {/if}
           <select id="base" value={settings.baseCurrency} onchange={(e) => setBase(e.currentTarget.value)}>
             {#each CURRENCIES as currency (currency.code)}
-              <option value={currency.code}>{currency.code} — {currency.name}</option>
+              <option value={currency.code}>{currency.code} · {currency.name}</option>
             {/each}
           </select>
         </div>

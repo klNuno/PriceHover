@@ -4,7 +4,7 @@ import type { Rounding } from './settings';
 const FORMATTERS = new Map<string, Intl.NumberFormat>();
 
 /**
- * `Intl` already knows each currency's minor unit from ISO 4217 — 0 for JPY and
+ * `Intl` already knows each currency's minor unit from ISO 4217: 0 for JPY and
  * KRW, 3 for KWD. Overriding `maximumFractionDigits` by hand, as this used to,
  * only ever got that wrong: KWD was capped at two decimals.
  */
@@ -89,7 +89,7 @@ export function formatCurrencyRange(
   const low = formatCurrencyAmount(min, code, rounding);
   const high = formatCurrencyAmount(max, code, rounding);
 
-  // Drop the leading run the two share — symbol, and `≈` when both carry it —
+  // Drop the leading run the two share (symbol, and `≈` when both carry it)
   // but never a digit, so "$1" and "$12" keep their first character.
   let shared = 0;
   while (

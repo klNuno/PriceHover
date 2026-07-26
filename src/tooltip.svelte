@@ -2,7 +2,7 @@
   import { flagToCountryCode } from './currencies';
   // Statically imported on purpose. Splitting the flags into a lazily fetched
   // chunk would need `web_accessible_resources`, which lets any page probe for
-  // the extension — a worse trade than 12 kB of base64 in the bundle.
+  // the extension, a worse trade than 12 kB of base64 in the bundle.
   import { flagImage } from './flags';
   import { formatCurrencyAmount, formatCurrencyRange } from './formatter';
   import { t } from './i18n';
@@ -121,7 +121,7 @@
     scratch.value = text;
     scratch.setAttribute('readonly', '');
     // Off-screen, not invisible. A textarea at 1px with `opacity: 0` cannot be
-    // reliably selected — the copy silently returned false about half the time.
+    // reliably selected: the copy silently returned false about half the time.
     // Parked to the left at the current scroll offset, it never flashes and it
     // never fails.
     scratch.style.cssText =
@@ -147,7 +147,7 @@
     if (!ok && navigator.clipboard) {
       // Raced, never plainly awaited: a clipboard promise that settles neither
       // way is a real state this API gets into, and awaiting one means the user
-      // clicks and nothing ever happens — no copy, no error, no console entry.
+      // clicks and nothing ever happens: no copy, no error, no console entry.
       ok = await Promise.race([
         navigator.clipboard.writeText(text).then(() => true, () => false),
         new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 500)),

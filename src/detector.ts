@@ -8,9 +8,9 @@ import type { TokenResolver } from './locale';
  * Matching is case-sensitive on purpose: with an `i` flag, ISO codes swallow
  * ordinary English ("try 100 times" → TRY 100, "php 8.2" → PHP 8.2).
  *
- * `prefix` — token before the amount, with at most one space (`RM 5`).
- * `suffix` — token after the amount, with at most one space (`199 kr`).
- * `tight`  — prefix that must touch the digits (`R100`). Reserved for tokens so
+ * `prefix`: token before the amount, with at most one space (`RM 5`).
+ * `suffix`: token after the amount, with at most one space (`199 kr`).
+ * `tight`:  prefix that must touch the digits (`R100`). Reserved for tokens so
  *            short that the spaced form matches prose ("see section R 5").
  */
 interface SymbolSpec {
@@ -29,7 +29,7 @@ const tightPrefix = (token: string, code: string): SymbolSpec =>
   ({ token, code, prefix: false, suffix: false, tight: true });
 
 const SYMBOLS: SymbolSpec[] = [
-  // Sign symbols — unambiguous, allowed on either side.
+  // Sign symbols, unambiguous, allowed on either side.
   both('$', 'USD'), both('€', 'EUR'), both('£', 'GBP'), both('¥', 'JPY'),
   both('￥', 'JPY'), both('₹', 'INR'), both('₩', 'KRW'), both('₦', 'NGN'),
   both('₱', 'PHP'), both('฿', 'THB'), both('₺', 'TRY'), both('₽', 'RUB'),
@@ -77,11 +77,11 @@ const GROUP_SEP = `[,.${SPACE_CLASS}]`;
 
 /**
  * Three shapes, tried in order:
- * 1. Indian grouping — 1,49,900 / 12,34,567.89 (two-digit groups above the
+ * 1. Indian grouping: 1,49,900 / 12,34,567.89 (two-digit groups above the
  *    first thousand). Must come first: the western pattern would match only
  *    the leading digit and the boundary lookahead would then reject the lot.
- * 2. western grouping — 1,234.56 / 1.234,56 / 1 234,56
- * 3. plain digit run — 746000 / 22000 (common in VND, IDR, KZT…)
+ * 2. western grouping: 1,234.56 / 1.234,56 / 1 234,56
+ * 3. plain digit run: 746000 / 22000 (common in VND, IDR, KZT…)
  *
  * Up to three decimals so KWD and friends survive; the boundary lookahead
  * below rejects anything longer instead of silently truncating it.
@@ -151,7 +151,7 @@ export function normalizeAmount(raw: string, code: string): number {
   if (lastComma === -1 && lastDot === -1) return parseFloat(s);
 
   // Both separators present: the rightmost one is the decimal point, unless it
-  // is followed by three digits — then both are thousands separators.
+  // is followed by three digits, in which case both are thousands separators.
   if (lastComma !== -1 && lastDot !== -1) {
     const decimalIndex = Math.max(lastComma, lastDot);
     if (s.length - decimalIndex - 1 === 3) return parseFloat(s.replace(/[,.]/g, ''));
@@ -231,7 +231,7 @@ function parseMatch(
       matchStart: index,
       matchEnd: index + match[0].length,
       textSource,
-      // Only when the page actually changed the reading — a `$` on a .ca domain,
+      // Only when the page actually changed the reading: a `$` on a .ca domain,
       // not every `$` in existence. The tooltip says so, and a claim that fires
       // on every price is a claim nobody reads.
       ...(currencyCode !== spec.code ? { inferred: true } : {}),
@@ -414,7 +414,7 @@ export function detectPricesFromElement(element: Element, resolve?: TokenResolve
 
     const fullText = element.textContent ?? '';
     // Non-leaf elements with short content are likely price containers (Steam, Amazon…)
-    // — use full textContent so nested prices are found, hitboxes handle precision.
+    // so use full textContent: nested prices are found, hitboxes handle precision.
     // Long elements use directTextContent to avoid matching entire paragraphs.
     const textSource = element.childElementCount === 0 || fullText.trim().length <= 150
       ? 'full'

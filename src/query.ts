@@ -64,7 +64,7 @@ const NUMERIC_TOKEN = /^[\d,.']+$/;
 
 /**
  * `20 chf` and `chf 20` mean the same thing, and the amount may itself contain
- * spaces ("1 234,56 eur") — so the amount is rebuilt from every numeric token
+ * spaces ("1 234,56 eur"), so the amount is rebuilt from every numeric token
  * before the detector, which only reads one shape, is asked about it.
  */
 function detectAmount(amountTokens: string[], code: string): DetectedPrice | null {
@@ -85,7 +85,7 @@ export function parseQuery(raw: string, baseCurrency?: string): ParsedQuery {
     const codes = words.map(resolveCurrencyCode);
 
     if (words.length === 0 && baseCurrency) {
-      // A bare number means "this many of my own currency" — the most common
+      // A bare number means "this many of my own currency", the most common
       // thing anyone types into a converter, and it used to filter the list to
       // nothing at all.
       const price = detectAmount(numbers, baseCurrency);

@@ -1,17 +1,17 @@
 import { Resvg } from '@resvg/resvg-js';
 import { writeFileSync, mkdirSync } from 'fs';
 
-// "$→€" icon — dark background, white dollar, green arrow + euro
+// "$→€" icon: dark background, white dollar, green arrow and euro
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <rect width="128" height="128" rx="22" fill="#111111"/>
 
-  <!-- $ — white, left -->
+  <!-- $, white, left -->
   <text x="38" y="88"
     font-family="Arial, Helvetica, sans-serif"
     font-size="72" font-weight="700"
     fill="#ffffff" text-anchor="middle">$</text>
 
-  <!-- € — green, right -->
+  <!-- €, green, right -->
   <text x="90" y="88"
     font-family="Arial, Helvetica, sans-serif"
     font-size="72" font-weight="700"
