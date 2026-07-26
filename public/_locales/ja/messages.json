@@ -1,0 +1,191 @@
+{
+  "extName": {
+    "message": "PriceHover"
+  },
+  "extDescription": {
+    "message": "ページ上の価格にカーソルを合わせると自国通貨で表示します。"
+  },
+  "searchPlaceholder": {
+    "message": "検索、または価格を入力…"
+  },
+  "searchLabel": {
+    "message": "通貨を検索"
+  },
+  "noResults": {
+    "message": "結果なし"
+  },
+  "baseCurrency": {
+    "message": "自国通貨"
+  },
+  "baseCurrencyHelp": {
+    "message": "この通貨で表示されている価格はそのままにします。"
+  },
+  "convertTo": {
+    "message": "変換先"
+  },
+  "convertToHelp": {
+    "message": "ツールチップ内、自国通貨の下に表示されます。"
+  },
+  "shownCount": {
+    "message": "$1 件表示"
+  },
+  "settings": {
+    "message": "設定"
+  },
+  "ratesUpdated": {
+    "message": "レート $1"
+  },
+  "ratesNever": {
+    "message": "レート未取得"
+  },
+  "ratesStale": {
+    "message": "レートが古い可能性があります"
+  },
+  "refresh": {
+    "message": "更新"
+  },
+  "refreshing": {
+    "message": "更新中…"
+  },
+  "refreshFailed": {
+    "message": "更新に失敗しました"
+  },
+  "timeJustNow": {
+    "message": "たった今"
+  },
+  "timeMinutes": {
+    "message": "$1 分前"
+  },
+  "timeHours": {
+    "message": "$1 時間前"
+  },
+  "timeDays": {
+    "message": "$1 日前"
+  },
+  "tooltipNoCurrencies": {
+    "message": "通貨が選択されていません"
+  },
+  "tooltipChooseCurrencies": {
+    "message": "設定を開く"
+  },
+  "tooltipInferred": {
+    "message": "サイトの国から通貨を推定しました"
+  },
+  "tooltipCopyHint": {
+    "message": "クリックでコピー"
+  },
+  "tooltipCopied": {
+    "message": "コピーしました"
+  },
+  "extensionOff": {
+    "message": "PriceHover はオフです"
+  },
+  "turnOn": {
+    "message": "オンにする"
+  },
+  "turnOff": {
+    "message": "オフにする"
+  },
+  "pauseOnSite": {
+    "message": "$1 で一時停止"
+  },
+  "resumeOnSite": {
+    "message": "$1 で再開"
+  },
+  "pausedOnSite": {
+    "message": "$1 で一時停止中"
+  },
+  "optionsTitle": {
+    "message": "PriceHover の設定"
+  },
+  "sectionCurrencies": {
+    "message": "通貨"
+  },
+  "sectionBehaviour": {
+    "message": "動作"
+  },
+  "sectionSites": {
+    "message": "サイト"
+  },
+  "sectionAbout": {
+    "message": "概要"
+  },
+  "hoverDelay": {
+    "message": "ホバー遅延"
+  },
+  "hoverDelayHelp": {
+    "message": "ツールチップが出るまでカーソルを静止させる時間。長くすると読書中の点滅が減ります。"
+  },
+  "delayInstant": {
+    "message": "即時"
+  },
+  "rounding": {
+    "message": "丸め"
+  },
+  "roundingHelp": {
+    "message": "換算価格は概算です。桁数を減らすとそれが伝わります。"
+  },
+  "roundingExact": {
+    "message": "正確"
+  },
+  "roundingSmart": {
+    "message": "スマート"
+  },
+  "roundingInteger": {
+    "message": "整数"
+  },
+  "inlineMode": {
+    "message": "ページ内の価格を書き換える"
+  },
+  "inlineModeHelp": {
+    "message": "ホバーせずに各価格の横へ自国通貨を表示します。ホバーすれば全一覧が開きます。"
+  },
+  "pageContext": {
+    "message": "サイトの国に応じて $$・kr・¥ を解釈する"
+  },
+  "pageContextHelp": {
+    "message": ".ca ドメインでは $$ をカナダドル、.no では kr をノルウェークローネと解釈します。オフの場合は常に USD と SEK です。"
+  },
+  "enabledEverywhere": {
+    "message": "有効"
+  },
+  "enabledEverywhereHelp": {
+    "message": "オフにすると、どのページでも一切動作しません。"
+  },
+  "pausedSites": {
+    "message": "一時停止中のサイト"
+  },
+  "pausedSitesEmpty": {
+    "message": "一時停止中のサイトはありません。"
+  },
+  "addSitePlaceholder": {
+    "message": "example.com"
+  },
+  "add": {
+    "message": "追加"
+  },
+  "remove": {
+    "message": "削除"
+  },
+  "reset": {
+    "message": "初期設定に戻す"
+  },
+  "version": {
+    "message": "バージョン $1"
+  },
+  "privacyPolicy": {
+    "message": "プライバシーポリシー"
+  },
+  "privacyNote": {
+    "message": "PriceHover が通信する相手は為替レートの open.er-api.com ただ一つです。閲覧したページの情報がブラウザーの外に出ることはありません。"
+  },
+  "welcomeTitle": {
+    "message": "PriceHover の準備ができました"
+  },
+  "welcomeBody": {
+    "message": "下で自国通貨を選び、任意の価格にカーソルを合わせてください。"
+  },
+  "welcomeDismiss": {
+    "message": "わかりました"
+  }
+}

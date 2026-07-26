@@ -1,5 +1,6 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-GlobalRegistrator.register();
+// Bun shares one process across test files, and registering twice throws.
+if (!globalThis.document) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { detectPricesFromElement } from './detector';

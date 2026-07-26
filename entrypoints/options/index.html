@@ -1,8 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- A full tab, not the cramped embedded panel. WXT reads this into
+         manifest.options_ui; setting it in wxt.config.ts alone gets overwritten. -->
+    <meta name="manifest.open_in_tab" content="true" />
     <title>PriceHover</title>
   </head>
   <body>

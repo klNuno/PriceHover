@@ -1,0 +1,191 @@
+{
+  "extName": {
+    "message": "PriceHover"
+  },
+  "extDescription": {
+    "message": "将鼠标悬停在任意价格上，即可查看本币金额。"
+  },
+  "searchPlaceholder": {
+    "message": "搜索或输入价格…"
+  },
+  "searchLabel": {
+    "message": "搜索货币"
+  },
+  "noResults": {
+    "message": "无结果"
+  },
+  "baseCurrency": {
+    "message": "你的货币"
+  },
+  "baseCurrencyHelp": {
+    "message": "已是该货币的价格将被忽略。"
+  },
+  "convertTo": {
+    "message": "换算为"
+  },
+  "convertToHelp": {
+    "message": "显示在提示框中，位于你的货币下方。"
+  },
+  "shownCount": {
+    "message": "显示 $1 种"
+  },
+  "settings": {
+    "message": "设置"
+  },
+  "ratesUpdated": {
+    "message": "汇率 $1"
+  },
+  "ratesNever": {
+    "message": "汇率未加载"
+  },
+  "ratesStale": {
+    "message": "汇率可能已过期"
+  },
+  "refresh": {
+    "message": "刷新"
+  },
+  "refreshing": {
+    "message": "正在刷新…"
+  },
+  "refreshFailed": {
+    "message": "刷新失败"
+  },
+  "timeJustNow": {
+    "message": "刚刚"
+  },
+  "timeMinutes": {
+    "message": "$1 分钟前"
+  },
+  "timeHours": {
+    "message": "$1 小时前"
+  },
+  "timeDays": {
+    "message": "$1 天前"
+  },
+  "tooltipNoCurrencies": {
+    "message": "未选择货币"
+  },
+  "tooltipChooseCurrencies": {
+    "message": "打开设置"
+  },
+  "tooltipInferred": {
+    "message": "根据网站所属国家推断货币"
+  },
+  "tooltipCopyHint": {
+    "message": "点击复制"
+  },
+  "tooltipCopied": {
+    "message": "已复制"
+  },
+  "extensionOff": {
+    "message": "PriceHover 已关闭"
+  },
+  "turnOn": {
+    "message": "开启"
+  },
+  "turnOff": {
+    "message": "关闭"
+  },
+  "pauseOnSite": {
+    "message": "在 $1 上暂停"
+  },
+  "resumeOnSite": {
+    "message": "在 $1 上恢复"
+  },
+  "pausedOnSite": {
+    "message": "已在 $1 上暂停"
+  },
+  "optionsTitle": {
+    "message": "PriceHover 设置"
+  },
+  "sectionCurrencies": {
+    "message": "货币"
+  },
+  "sectionBehaviour": {
+    "message": "行为"
+  },
+  "sectionSites": {
+    "message": "网站"
+  },
+  "sectionAbout": {
+    "message": "关于"
+  },
+  "hoverDelay": {
+    "message": "悬停延迟"
+  },
+  "hoverDelayHelp": {
+    "message": "指针需静止多久才显示提示框。时间越长，阅读时闪烁的提示越少。"
+  },
+  "delayInstant": {
+    "message": "立即"
+  },
+  "rounding": {
+    "message": "取整"
+  },
+  "roundingHelp": {
+    "message": "换算价格只是估算，位数越少越诚实。"
+  },
+  "roundingExact": {
+    "message": "精确"
+  },
+  "roundingSmart": {
+    "message": "智能"
+  },
+  "roundingInteger": {
+    "message": "整数"
+  },
+  "inlineMode": {
+    "message": "直接改写页面中的价格"
+  },
+  "inlineModeHelp": {
+    "message": "无需悬停即在每个价格旁显示你的货币。悬停仍会打开完整列表。"
+  },
+  "pageContext": {
+    "message": "根据网站所属国家解读 $$、kr 和 ¥"
+  },
+  "pageContextHelp": {
+    "message": "在 .ca 域名上 $$ 表示加元，在 .no 上 kr 表示挪威克朗。关闭后一律视为 USD 和 SEK。"
+  },
+  "enabledEverywhere": {
+    "message": "已启用"
+  },
+  "enabledEverywhereHelp": {
+    "message": "关闭后，PriceHover 在任何页面都不会工作。"
+  },
+  "pausedSites": {
+    "message": "已暂停的网站"
+  },
+  "pausedSitesEmpty": {
+    "message": "没有暂停的网站。"
+  },
+  "addSitePlaceholder": {
+    "message": "example.com"
+  },
+  "add": {
+    "message": "添加"
+  },
+  "remove": {
+    "message": "移除"
+  },
+  "reset": {
+    "message": "恢复默认"
+  },
+  "version": {
+    "message": "版本 $1"
+  },
+  "privacyPolicy": {
+    "message": "隐私政策"
+  },
+  "privacyNote": {
+    "message": "PriceHover 只连接 open.er-api.com 获取汇率。你访问过的页面信息绝不会离开浏览器。"
+  },
+  "welcomeTitle": {
+    "message": "PriceHover 已就绪"
+  },
+  "welcomeBody": {
+    "message": "在下方选择你的货币，然后将鼠标悬停在任意价格上。"
+  },
+  "welcomeDismiss": {
+    "message": "知道了"
+  }
+}

@@ -1,0 +1,191 @@
+{
+  "extName": {
+    "message": "PriceHover"
+  },
+  "extDescription": {
+    "message": "Survolez un prix sur n’importe quelle page pour le voir dans votre devise."
+  },
+  "searchPlaceholder": {
+    "message": "Rechercher ou saisir un prix…"
+  },
+  "searchLabel": {
+    "message": "Rechercher une devise"
+  },
+  "noResults": {
+    "message": "Aucun résultat"
+  },
+  "baseCurrency": {
+    "message": "Votre devise"
+  },
+  "baseCurrencyHelp": {
+    "message": "Les prix déjà dans cette devise sont ignorés."
+  },
+  "convertTo": {
+    "message": "Convertir vers"
+  },
+  "convertToHelp": {
+    "message": "Affichées dans l’infobulle, sous votre devise."
+  },
+  "shownCount": {
+    "message": "$1 affichées"
+  },
+  "settings": {
+    "message": "Réglages"
+  },
+  "ratesUpdated": {
+    "message": "Taux $1"
+  },
+  "ratesNever": {
+    "message": "Taux non chargés"
+  },
+  "ratesStale": {
+    "message": "Taux peut-être périmés"
+  },
+  "refresh": {
+    "message": "Actualiser"
+  },
+  "refreshing": {
+    "message": "Actualisation…"
+  },
+  "refreshFailed": {
+    "message": "Échec de l’actualisation"
+  },
+  "timeJustNow": {
+    "message": "à l’instant"
+  },
+  "timeMinutes": {
+    "message": "il y a $1 min"
+  },
+  "timeHours": {
+    "message": "il y a $1 h"
+  },
+  "timeDays": {
+    "message": "il y a $1 j"
+  },
+  "tooltipNoCurrencies": {
+    "message": "Aucune devise choisie"
+  },
+  "tooltipChooseCurrencies": {
+    "message": "Ouvrir les réglages"
+  },
+  "tooltipInferred": {
+    "message": "Devise déduite du pays de ce site"
+  },
+  "tooltipCopyHint": {
+    "message": "Cliquer pour copier"
+  },
+  "tooltipCopied": {
+    "message": "Copié"
+  },
+  "extensionOff": {
+    "message": "PriceHover est désactivé"
+  },
+  "turnOn": {
+    "message": "Activer"
+  },
+  "turnOff": {
+    "message": "Désactiver"
+  },
+  "pauseOnSite": {
+    "message": "Suspendre sur $1"
+  },
+  "resumeOnSite": {
+    "message": "Réactiver sur $1"
+  },
+  "pausedOnSite": {
+    "message": "Suspendu sur $1"
+  },
+  "optionsTitle": {
+    "message": "Réglages de PriceHover"
+  },
+  "sectionCurrencies": {
+    "message": "Devises"
+  },
+  "sectionBehaviour": {
+    "message": "Comportement"
+  },
+  "sectionSites": {
+    "message": "Sites"
+  },
+  "sectionAbout": {
+    "message": "À propos"
+  },
+  "hoverDelay": {
+    "message": "Délai de survol"
+  },
+  "hoverDelayHelp": {
+    "message": "Temps d’immobilité du curseur avant l’apparition de l’infobulle. Plus long, moins d’infobulles qui clignotent pendant la lecture."
+  },
+  "delayInstant": {
+    "message": "Immédiat"
+  },
+  "rounding": {
+    "message": "Arrondi"
+  },
+  "roundingHelp": {
+    "message": "Un prix converti est une estimation. Moins de chiffres le disent."
+  },
+  "roundingExact": {
+    "message": "Exact"
+  },
+  "roundingSmart": {
+    "message": "Intelligent"
+  },
+  "roundingInteger": {
+    "message": "Nombres entiers"
+  },
+  "inlineMode": {
+    "message": "Réécrire les prix dans la page"
+  },
+  "inlineModeHelp": {
+    "message": "Affiche votre devise à côté de chaque prix, sans survol. Le survol ouvre toujours la liste complète."
+  },
+  "pageContext": {
+    "message": "Lire $$, kr et ¥ selon le pays du site"
+  },
+  "pageContextHelp": {
+    "message": "Sur un domaine .ca, $$ vaut dollar canadien ; sur .no, kr vaut couronne norvégienne. Désactivé, ils valent toujours USD et SEK."
+  },
+  "enabledEverywhere": {
+    "message": "Activé"
+  },
+  "enabledEverywhereHelp": {
+    "message": "Désactivé, PriceHover ne fait rien sur aucune page."
+  },
+  "pausedSites": {
+    "message": "Sites suspendus"
+  },
+  "pausedSitesEmpty": {
+    "message": "Aucun site suspendu."
+  },
+  "addSitePlaceholder": {
+    "message": "exemple.com"
+  },
+  "add": {
+    "message": "Ajouter"
+  },
+  "remove": {
+    "message": "Retirer"
+  },
+  "reset": {
+    "message": "Réinitialiser"
+  },
+  "version": {
+    "message": "Version $1"
+  },
+  "privacyPolicy": {
+    "message": "Politique de confidentialité"
+  },
+  "privacyNote": {
+    "message": "PriceHover contacte un seul hôte, open.er-api.com, pour les taux de change. Rien sur les pages que vous visitez ne quitte votre navigateur."
+  },
+  "welcomeTitle": {
+    "message": "PriceHover est prêt"
+  },
+  "welcomeBody": {
+    "message": "Choisissez votre devise ci-dessous, puis survolez un prix sur n’importe quelle page."
+  },
+  "welcomeDismiss": {
+    "message": "Compris"
+  }
+}

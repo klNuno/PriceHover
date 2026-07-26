@@ -1,5 +1,6 @@
 import type { DetectedPrice } from './types';
 import { CURRENCY_BY_CODE } from './currencies';
+import type { TokenResolver } from './locale';
 
 /**
  * Where a currency token is allowed to sit relative to its amount.
@@ -127,7 +128,17 @@ const PRICE_REGEX = new RegExp(PRICE_SOURCE, 'u');
 const GLOBAL_PRICE_REGEX = new RegExp(PRICE_SOURCE, 'gu');
 
 const LETTER_REGEX = /\p{L}/u;
+const DIGIT_REGEX = /\d/;
 const STRIPPABLE_SPACE = new RegExp(`[${SPACE_CLASS}]`, 'g');
+
+/**
+ * Upper half of a range: a dash, then a bare amount. `%` and `‰` are excluded
+ * so "€10-20% off" stays a single price rather than becoming a €10–€20 range.
+ */
+const RANGE_DASH = `${SPACE}*[-‐‑‒–—~]${SPACE}*`;
+const RANGE_AFTER = new RegExp(`^${RANGE_DASH}(${AMOUNT})(?![\\p{L}\\d%‰])`, 'u');
+const RANGE_BEFORE = new RegExp(`(?<![\\p{L}\\d.,])(${AMOUNT})${RANGE_DASH}$`, 'u');
+const RANGE_BETWEEN = new RegExp(`^${RANGE_DASH}$`, 'u');
 
 /** Currencies whose minor unit is three digits, so `1.234` really is 1.234. */
 const THREE_DECIMAL_CURRENCIES = new Set(['KWD', 'BHD', 'OMR', 'JOD', 'TND']);
@@ -162,19 +173,36 @@ export function normalizeAmount(raw: string, code: string): number {
   return parseFloat(s.replace(separator, '.'));
 }
 
-function parseMatch(match: RegExpExecArray, textSource?: 'full' | 'direct'): DetectedPrice | null {
+/** Where the currency token sat, which decides which way a range can extend. */
+type TokenSide = 'before' | 'after';
+
+interface RawMatch {
+  price: DetectedPrice;
+  side: TokenSide;
+}
+
+function parseMatch(
+  match: RegExpMatchArray,
+  index: number,
+  textSource: 'full' | 'direct' | undefined,
+  resolve: TokenResolver | undefined
+): RawMatch | null {
   let token: string;
   let rawAmount: string;
+  let side: TokenSide;
 
   if (match[1]) {
     token = match[1];
     rawAmount = match[2];
+    side = 'before';
   } else if (match[3]) {
     token = match[3];
     rawAmount = match[4];
+    side = 'before';
   } else if (match[6]) {
     token = match[6];
     rawAmount = match[5];
+    side = 'after';
   } else {
     return null;
   }
@@ -187,17 +215,87 @@ function parseMatch(match: RegExpExecArray, textSource?: 'full' | 'direct'): Det
   // prose: "PHP 8.2", "Fr 20.5". Sign symbols keep the loose rule.
   if (LETTER_REGEX.test(token) && /[.,]\d$/.test(rawAmount)) return null;
 
-  const amount = normalizeAmount(rawAmount, spec.code);
+  // `$`, `kr` and `¥` mean different currencies in different markets. The page
+  // resolves them; without a resolver the historical default stands.
+  const currencyCode = resolve ? resolve(token, spec.code) : spec.code;
+
+  const amount = normalizeAmount(rawAmount, currencyCode);
   if (!Number.isFinite(amount) || amount <= 0) return null;
 
   return {
-    amount,
-    currencyCode: spec.code,
-    matchedText: match[0],
-    matchStart: match.index,
-    matchEnd: match.index + match[0].length,
-    textSource,
+    side,
+    price: {
+      amount,
+      currencyCode,
+      matchedText: match[0],
+      matchStart: index,
+      matchEnd: index + match[0].length,
+      textSource,
+      // Only when the page actually changed the reading — a `$` on a .ca domain,
+      // not every `$` in existence. The tooltip says so, and a claim that fires
+      // on every price is a claim nobody reads.
+      ...(currencyCode !== spec.code ? { inferred: true } : {}),
+    },
   };
+}
+
+/**
+ * Turns two prices, or a price and a bare number, into one range.
+ *
+ * "€10 – €20" arrives as two complete matches; "€10-20" and "10-20 kr" arrive
+ * as one match plus a loose number on the side the token is not on. Both are
+ * merged in place so the hitbox still covers the whole printed range.
+ */
+function mergeRanges(text: string, matches: RawMatch[]): DetectedPrice[] {
+  const out: DetectedPrice[] = [];
+
+  for (let i = 0; i < matches.length; i++) {
+    const current = matches[i];
+    const price = current.price;
+    const start = price.matchStart!;
+    const end = price.matchEnd!;
+
+    // Two full matches with nothing but a dash between them.
+    const next = matches[i + 1];
+    if (next && next.price.currencyCode === price.currencyCode) {
+      const between = text.slice(end, next.price.matchStart!);
+      if (RANGE_BETWEEN.test(between) && next.price.amount > price.amount) {
+        out.push({ ...price, amountMax: next.price.amount, matchEnd: next.price.matchEnd });
+        i++;
+        continue;
+      }
+    }
+
+    // A bare number on the far side of the token: "€10-20", "10-20 kr".
+    if (current.side === 'before') {
+      const tail = RANGE_AFTER.exec(text.slice(end));
+      if (tail) {
+        const max = normalizeAmount(tail[1], price.currencyCode);
+        if (Number.isFinite(max) && max > price.amount) {
+          out.push({ ...price, amountMax: max, matchEnd: end + tail[0].length });
+          continue;
+        }
+      }
+    } else {
+      const head = RANGE_BEFORE.exec(text.slice(0, start));
+      if (head) {
+        const min = normalizeAmount(head[1], price.currencyCode);
+        if (Number.isFinite(min) && min > 0 && min < price.amount) {
+          out.push({
+            ...price,
+            amount: min,
+            amountMax: price.amount,
+            matchStart: start - head[0].length,
+          });
+          continue;
+        }
+      }
+    }
+
+    out.push(price);
+  }
+
+  return out;
 }
 
 /** Reads schema.org and data-* annotations, which beat any regex when present. */
@@ -258,23 +356,34 @@ function trySemanticDetection(element: Element): DetectedPrice | null {
   return { amount, currencyCode };
 }
 
-function tryRegexDetection(text: string): DetectedPrice | null {
+function tryRegexDetection(text: string, resolve?: TokenResolver): DetectedPrice | null {
+  if (!DIGIT_REGEX.test(text)) return null;
   const match = PRICE_REGEX.exec(text);
   if (!match) return null;
-  return parseMatch(match);
+  const parsed = parseMatch(match, match.index, undefined, resolve);
+  if (!parsed) return null;
+  return mergeRanges(text, [parsed])[0] ?? null;
 }
 
-function tryRegexDetectionAll(text: string, textSource: 'full' | 'direct'): DetectedPrice[] {
-  GLOBAL_PRICE_REGEX.lastIndex = 0;
-  const results: DetectedPrice[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = GLOBAL_PRICE_REGEX.exec(text)) !== null) {
-    const price = parseMatch(match, textSource);
-    if (price) results.push(price);
-    // A zero-length match cannot happen here, but guard the loop anyway.
-    if (GLOBAL_PRICE_REGEX.lastIndex === match.index) GLOBAL_PRICE_REGEX.lastIndex++;
+function tryRegexDetectionAll(
+  text: string,
+  textSource: 'full' | 'direct',
+  resolve?: TokenResolver
+): DetectedPrice[] {
+  // Every branch of PRICE_SOURCE requires a digit, so text without one cannot
+  // match. Skipping the scan turns a 160 µs hover over a paragraph into 0.1 µs,
+  // and most of the text on a page has no digit in it at all.
+  if (!DIGIT_REGEX.test(text)) return [];
+
+  const raw: RawMatch[] = [];
+  // `matchAll` keeps no cursor on the shared regex, so nothing here can be left
+  // in a bad state for the next call.
+  for (const match of text.matchAll(GLOBAL_PRICE_REGEX)) {
+    const parsed = parseMatch(match, match.index ?? 0, textSource, resolve);
+    if (parsed) raw.push(parsed);
   }
-  return results;
+  if (!raw.length) return [];
+  return mergeRanges(text, raw);
 }
 
 /**
@@ -290,10 +399,18 @@ function directTextContent(element: Element): string {
   return text;
 }
 
-export function detectPricesFromElement(element: Element): DetectedPrice[] {
+/** Anything `trySemanticDetection` could possibly read. */
+const SEMANTIC_SELECTOR = '[itemprop],[itemscope],[data-price],[data-currency]';
+
+export function detectPricesFromElement(element: Element, resolve?: TokenResolver): DetectedPrice[] {
   try {
-    const semantic = trySemanticDetection(element);
-    if (semantic) return [semantic];
+    // One native selector match beats walking six ancestors and asking each of
+    // them for four attributes, and the vast majority of pages carry none of
+    // this markup at all.
+    if (element.closest(SEMANTIC_SELECTOR)) {
+      const semantic = trySemanticDetection(element);
+      if (semantic) return [semantic];
+    }
 
     const fullText = element.textContent ?? '';
     // Non-leaf elements with short content are likely price containers (Steam, Amazon…)
@@ -305,21 +422,21 @@ export function detectPricesFromElement(element: Element): DetectedPrice[] {
     const text = textSource === 'full' ? fullText : directTextContent(element);
 
     if (!text.trim()) return [];
-    return tryRegexDetectionAll(text, textSource);
+    return tryRegexDetectionAll(text, textSource, resolve);
   } catch {
     return [];
   }
 }
 
-export function detectPriceFromText(text: string): DetectedPrice | null {
+export function detectPriceFromText(text: string, resolve?: TokenResolver): DetectedPrice | null {
   try {
-    return tryRegexDetection(text.trim());
+    return tryRegexDetection(text.trim(), resolve);
   } catch {
     return null;
   }
 }
 
 /** Exposed for tests: the exact text a detector run would match. */
-export function detectAllFromText(text: string): DetectedPrice[] {
-  return tryRegexDetectionAll(text, 'full');
+export function detectAllFromText(text: string, resolve?: TokenResolver): DetectedPrice[] {
+  return tryRegexDetectionAll(text, 'full', resolve);
 }

@@ -33,6 +33,14 @@ jobs:
             exit 1
           fi
 
+      # public/_locales is generated from one table and committed. A key added
+      # to the table without regenerating ships a manifest referencing a message
+      # that does not exist, which blanks a label rather than failing loudly.
+      - name: Check generated locales are up to date
+        run: |
+          bun run locales
+          git diff --exit-code public/_locales
+
       - name: Typecheck
         run: bun run typecheck
 

@@ -1,0 +1,191 @@
+{
+  "extName": {
+    "message": "PriceHover"
+  },
+  "extDescription": {
+    "message": "Hover any price on any page to see it in your own currency."
+  },
+  "searchPlaceholder": {
+    "message": "Search or type a price…"
+  },
+  "searchLabel": {
+    "message": "Search currencies"
+  },
+  "noResults": {
+    "message": "No results"
+  },
+  "baseCurrency": {
+    "message": "Your currency"
+  },
+  "baseCurrencyHelp": {
+    "message": "Prices already in this currency are left alone."
+  },
+  "convertTo": {
+    "message": "Convert to"
+  },
+  "convertToHelp": {
+    "message": "Shown in the tooltip, under your own currency."
+  },
+  "shownCount": {
+    "message": "$1 shown"
+  },
+  "settings": {
+    "message": "Settings"
+  },
+  "ratesUpdated": {
+    "message": "Rates $1"
+  },
+  "ratesNever": {
+    "message": "Rates not loaded"
+  },
+  "ratesStale": {
+    "message": "Rates may be out of date"
+  },
+  "refresh": {
+    "message": "Refresh"
+  },
+  "refreshing": {
+    "message": "Refreshing…"
+  },
+  "refreshFailed": {
+    "message": "Refresh failed"
+  },
+  "timeJustNow": {
+    "message": "just now"
+  },
+  "timeMinutes": {
+    "message": "$1 min ago"
+  },
+  "timeHours": {
+    "message": "$1 h ago"
+  },
+  "timeDays": {
+    "message": "$1 d ago"
+  },
+  "tooltipNoCurrencies": {
+    "message": "No currencies chosen"
+  },
+  "tooltipChooseCurrencies": {
+    "message": "Open settings"
+  },
+  "tooltipInferred": {
+    "message": "Currency read from this site’s country"
+  },
+  "tooltipCopyHint": {
+    "message": "Click to copy"
+  },
+  "tooltipCopied": {
+    "message": "Copied"
+  },
+  "extensionOff": {
+    "message": "PriceHover is off"
+  },
+  "turnOn": {
+    "message": "Turn on"
+  },
+  "turnOff": {
+    "message": "Turn off"
+  },
+  "pauseOnSite": {
+    "message": "Pause on $1"
+  },
+  "resumeOnSite": {
+    "message": "Resume on $1"
+  },
+  "pausedOnSite": {
+    "message": "Paused on $1"
+  },
+  "optionsTitle": {
+    "message": "PriceHover settings"
+  },
+  "sectionCurrencies": {
+    "message": "Currencies"
+  },
+  "sectionBehaviour": {
+    "message": "Behaviour"
+  },
+  "sectionSites": {
+    "message": "Sites"
+  },
+  "sectionAbout": {
+    "message": "About"
+  },
+  "hoverDelay": {
+    "message": "Hover delay"
+  },
+  "hoverDelayHelp": {
+    "message": "How still the pointer must be before the tooltip appears. Longer means fewer tooltips flashing past while you read."
+  },
+  "delayInstant": {
+    "message": "Instant"
+  },
+  "rounding": {
+    "message": "Rounding"
+  },
+  "roundingHelp": {
+    "message": "A converted price is an estimate. Fewer digits say so."
+  },
+  "roundingExact": {
+    "message": "Exact"
+  },
+  "roundingSmart": {
+    "message": "Smart"
+  },
+  "roundingInteger": {
+    "message": "Whole numbers"
+  },
+  "inlineMode": {
+    "message": "Rewrite prices in the page"
+  },
+  "inlineModeHelp": {
+    "message": "Shows your currency next to every price, without hovering. Hovering still opens the full list."
+  },
+  "pageContext": {
+    "message": "Read $$, kr and ¥ from the site’s country"
+  },
+  "pageContextHelp": {
+    "message": "On a .ca domain $$ means Canadian dollars, on a .no domain kr means Norwegian krone. Off, they always mean USD and SEK."
+  },
+  "enabledEverywhere": {
+    "message": "Enabled"
+  },
+  "enabledEverywhereHelp": {
+    "message": "Off means PriceHover does nothing on any page."
+  },
+  "pausedSites": {
+    "message": "Paused sites"
+  },
+  "pausedSitesEmpty": {
+    "message": "No site is paused."
+  },
+  "addSitePlaceholder": {
+    "message": "example.com"
+  },
+  "add": {
+    "message": "Add"
+  },
+  "remove": {
+    "message": "Remove"
+  },
+  "reset": {
+    "message": "Reset to defaults"
+  },
+  "version": {
+    "message": "Version $1"
+  },
+  "privacyPolicy": {
+    "message": "Privacy policy"
+  },
+  "privacyNote": {
+    "message": "PriceHover contacts one host, open.er-api.com, for exchange rates. Nothing about the pages you visit ever leaves your browser."
+  },
+  "welcomeTitle": {
+    "message": "PriceHover is ready"
+  },
+  "welcomeBody": {
+    "message": "Pick your currency below, then hover any price on any page."
+  },
+  "welcomeDismiss": {
+    "message": "Got it"
+  }
+}

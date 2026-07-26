@@ -1,13 +1,17 @@
 import { mount, unmount } from 'svelte';
+import { convertPrice } from '../src/convert';
 import { detectPricesFromElement, detectPriceFromText } from '../src/detector';
-import { CURRENCY_BY_CODE } from '../src/currencies';
-import { STORAGE, DEFAULT_CURRENCIES, CACHE_DURATION_MS } from '../src/types';
-import type { ConvertedPrice, DetectedPrice, ExchangeRates } from '../src/types';
-import { formatCurrencyAmount } from '../src/formatter';
+import { createInlineAnnotator, INLINE_ATTR } from '../src/inline';
+import { makeTokenResolver } from '../src/locale';
+import type { TokenResolver } from '../src/locale';
 import { fetchRates, parseRates } from '../src/rates';
+import { isActiveOn, loadSettings, watchSettings } from '../src/settings';
+import type { Settings } from '../src/settings';
 import Tooltip from '../src/tooltip.svelte';
-import { hideTooltipState, showTooltipState } from '../src/tooltip-state';
+import { getCardRect, hideTooltipState, moveTooltipState, showTooltipState } from '../src/tooltip-state';
 import tooltipStyles from '../src/tooltip.css?inline';
+import { CACHE_DURATION_MS, STALE_AFTER_MS, STORAGE } from '../src/types';
+import type { DetectedPrice, ExchangeRates } from '../src/types';
 
 const E = (msg: string, err: unknown) => console.error(`[PH] ${msg}`, err);
 
@@ -15,176 +19,154 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
 
-  main() {
+  async main() {
     if (!document.body) return;
 
-    // Shadow DOM host
-    const host = document.createElement('div');
-    host.id = 'pricehover-root';
-    host.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:2147483647;';
-    const shadow = host.attachShadow({ mode: 'closed' });
-    document.body.appendChild(host);
+    const hostname = location.hostname;
+    let settings = await loadSettings();
 
-    const style = document.createElement('style');
-    style.textContent = tooltipStyles;
-    shadow.appendChild(style);
+    // ── Rates ────────────────────────────────────────────────────────────────
+    // Fetched on first need, not on page load. Most pages are never hovered,
+    // and a storage read per page for rates nobody asked for is a page-load
+    // cost paid on every site the user visits.
 
-    const container = document.createElement('div');
-    shadow.appendChild(container);
+    let rates: ExchangeRates | null = null;
+    let ratesTimestamp = 0;
+    let ratesPromise: Promise<void> | null = null;
 
-    const tooltipInstance = mount(Tooltip, { target: container });
-    let rafId: number | null = null;
-    let selRafId: number | null = null;
-
-    let cachedRates: ExchangeRates | null = null;
-    let cachedCurrencies: string[] = DEFAULT_CURRENCIES;
-    let cachedCurrencySet = new Set(DEFAULT_CURRENCIES);
-    let refreshPromise: Promise<void> | null = null;
-
-    // Keyed on the element, but the text it held when we looked. Prices change
-    // in place on SPAs (Amazon variants, a site's own currency switcher), and a
-    // cache with no invalidation would keep serving the old amount.
-    interface CachedDetection {
-      text: string;
-      prices: DetectedPrice[];
-    }
-    const detectionCache = new WeakMap<Element, CachedDetection>();
-
-    function setCachedCurrencies(next: string[] | undefined): void {
-      cachedCurrencies = next?.length ? next : DEFAULT_CURRENCIES;
-      cachedCurrencySet = new Set(cachedCurrencies);
-    }
-
-    async function fetchRatesDirect(): Promise<void> {
+    async function fetchDirect(): Promise<void> {
       try {
-        const rates = await fetchRates();
-        if (!rates) return;
-        cachedRates = rates;
-        // Try to persist, but don't fail if storage is stubbed
+        const fetched = await fetchRates();
+        if (!fetched) return;
+        rates = fetched;
+        ratesTimestamp = Date.now();
         try {
           await chrome.storage.local.set({
-            [STORAGE.RATES]: rates,
-            [STORAGE.RATES_TS]: Date.now(),
+            [STORAGE.RATES]: fetched,
+            [STORAGE.RATES_TS]: ratesTimestamp,
           });
-        } catch { /* storage may be stubbed */ }
+        } catch { /* storage may be stubbed by an extension wrapper */ }
       } catch (err) {
-        E('direct fetch failed', err);
+        E('direct rate fetch failed', err);
       }
     }
 
-    function refreshCache(): Promise<void> {
-      if (!refreshPromise) {
-        refreshPromise = (async () => {
+    function ensureRates(): Promise<void> {
+      if (!ratesPromise) {
+        ratesPromise = (async () => {
           try {
-            const r = await chrome.storage.local.get([STORAGE.RATES, STORAGE.RATES_TS, STORAGE.CURRENCIES]);
-            const stored = parseRates(r?.[STORAGE.RATES]);
-            if (stored) cachedRates = stored;
-            if (r?.[STORAGE.CURRENCIES]) setCachedCurrencies(r[STORAGE.CURRENCIES] as string[]);
-
-            // Fetch directly if storage had no rates or they're stale
-            const ts: number = (r?.[STORAGE.RATES_TS] as number) ?? 0;
-            if (!cachedRates || Date.now() - ts > CACHE_DURATION_MS) {
-              await fetchRatesDirect();
+            const stored = await chrome.storage.local.get([STORAGE.RATES, STORAGE.RATES_TS]);
+            const parsed = parseRates(stored?.[STORAGE.RATES]);
+            if (parsed) {
+              rates = parsed;
+              const ts = stored?.[STORAGE.RATES_TS];
+              ratesTimestamp = typeof ts === 'number' ? ts : 0;
             }
+            if (!rates || Date.now() - ratesTimestamp > CACHE_DURATION_MS) await fetchDirect();
           } catch {
-            // storage.local.get itself failed (stubbed) — fetch directly
-            if (!cachedRates) await fetchRatesDirect();
+            if (!rates) await fetchDirect();
           }
-        })().finally(() => { refreshPromise = null; });
+        })().finally(() => { ratesPromise = null; });
       }
-      return refreshPromise;
+      return ratesPromise;
     }
 
-    refreshCache();
+    const ratesAreStale = (): boolean => Date.now() - ratesTimestamp > STALE_AFTER_MS;
 
-    function hideTooltip(): void {
-      pendingTooltip = null;
-      hideTooltipState();
+    // ── Currency resolution from the page ────────────────────────────────────
+
+    let resolver: TokenResolver | undefined;
+    function refreshResolver(): void {
+      resolver = settings.usePageContext
+        ? makeTokenResolver(hostname, document.documentElement.lang || '') ?? undefined
+        : undefined;
+    }
+    refreshResolver();
+
+    // ── Tooltip host, built on first use ─────────────────────────────────────
+    // 60 kB of Svelte and a shadow root used to be mounted into every page the
+    // user opened, price or no price.
+
+    let host: HTMLDivElement | null = null;
+    let tooltipInstance: ReturnType<typeof mount> | null = null;
+
+    function ensureTooltip(): HTMLDivElement {
+      if (host) return host;
+
+      host = document.createElement('div');
+      host.id = 'pricehover-root';
+      host.setAttribute(INLINE_ATTR, '1');
+      host.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:2147483647;';
+      const shadow = host.attachShadow({ mode: 'closed' });
+
+      const style = document.createElement('style');
+      style.textContent = tooltipStyles;
+      shadow.appendChild(style);
+
+      const container = document.createElement('div');
+      shadow.appendChild(container);
+      document.body.appendChild(host);
+
+      tooltipInstance = mount(Tooltip, { target: container });
+      return host;
     }
 
-    function convertPrice(
-      detected: DetectedPrice,
-      rates: ExchangeRates,
-      targetCodes: string[]
-    ): ConvertedPrice[] {
-      const sourceRate = rates[detected.currencyCode];
-      if (!sourceRate) return [];
-
-      if (!Number.isFinite(sourceRate) || sourceRate <= 0) return [];
-
-      return targetCodes
-        .filter((code) => code !== detected.currencyCode)
-        .map((code) => {
-          const targetRate = rates[code];
-          if (!targetRate || !Number.isFinite(targetRate) || targetRate <= 0) return null;
-
-          const amount = detected.amount * (targetRate / sourceRate);
-          const currency = CURRENCY_BY_CODE.get(code);
-          if (!currency) return null;
-
-          const formatted = formatCurrencyAmount(amount, code);
-          return { currency, amount, formatted } satisfies ConvertedPrice;
-        })
-        .filter((c): c is ConvertedPrice => c !== null);
+    function destroyTooltipHost(): void {
+      if (tooltipInstance) { unmount(tooltipInstance); tooltipInstance = null; }
+      host?.remove();
+      host = null;
     }
 
-    // What the user asked to see while the rates were still loading, so the
-    // tooltip can appear on its own once they land instead of staying silent.
-    let pendingTooltip: { prices: DetectedPrice[]; x: number; y: number; yBottom: number } | null = null;
+    // ── Detection cache ──────────────────────────────────────────────────────
 
-    function showTooltip(prices: DetectedPrice[], x: number, y: number, yBottom: number): void {
-      if (!cachedRates) {
-        pendingTooltip = { prices, x, y, yBottom };
-        refreshCache().then(() => {
-          const queued = pendingTooltip;
-          if (!queued || !cachedRates) return;
-          pendingTooltip = null;
-          showTooltip(queued.prices, queued.x, queued.y, queued.yBottom);
-        });
-        return;
-      }
+    interface CachedDetection { text: string; prices: DetectedPrice[] }
+    const detectionCache = new WeakMap<Element, CachedDetection>();
 
-      pendingTooltip = null;
-      const allConversions = prices.map((p) => convertPrice(p, cachedRates!, cachedCurrencies));
-      showTooltipState({ sources: prices, allConversions, x, y, yBottom });
-    }
-
-    function detectPricesWithCache(element: Element): DetectedPrice[] {
+    function detectWithCache(element: Element): DetectedPrice[] {
       const text = element.textContent ?? '';
       const cached = detectionCache.get(element);
       if (cached && cached.text === text) return cached.prices;
 
-      const prices = detectPricesFromElement(element);
+      const prices = detectPricesFromElement(element, resolver);
       detectionCache.set(element, { text, prices });
       return prices;
     }
 
-    // ── Multi-price hover state ──────────────────────────────────────────────
+    // ── Hitboxes ─────────────────────────────────────────────────────────────
+
+    const MIN_HITBOX = 6;
+    /** How far outside a rect the pointer may stray and still count as on it. */
+    const HIT_PAD = 4;
+    /** The gap between price and card, which the pointer has to cross to click. */
+    const BRIDGE = 12;
 
     interface PriceHitbox {
       price: DetectedPrice;
-      rects: DOMRect[];  // getClientRects() — one rect per line when text wraps
+      /** Re-measured on scroll: client rects are viewport-relative. */
+      measure: () => DOMRect[];
+      rects: DOMRect[];
     }
 
-    interface TextSegment {
-      node: Text;
-      start: number;
-      end: number;
-    }
-
-    const MIN_HITBOX_WIDTH = 6;
-    const MIN_HITBOX_HEIGHT = 6;
+    interface TextSegment { node: Text; start: number; end: number }
 
     let activeElement: Element | null = null;
-    let priceHitboxes: PriceHitbox[] = [];
-    let activePriceIdx = -1;
-    let mmRafId: number | null = null;
+    let hitboxes: PriceHitbox[] = [];
+    let activeIndex = -1;
+    let lastPointer = { x: 0, y: 0 };
+    let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+    let moveRaf: number | null = null;
+    let viewportRaf: number | null = null;
+    let selectionRaf: number | null = null;
 
-    function collectTextSegments(element: Element, directOnly: boolean): TextSegment[] {
+    function usableRects(rects: DOMRect[]): DOMRect[] {
+      return rects.filter((r) => r.width >= MIN_HITBOX && r.height >= MIN_HITBOX);
+    }
+
+    function collectSegments(element: Element, directOnly: boolean): TextSegment[] {
       const segments: TextSegment[] = [];
       let offset = 0;
 
-      const pushTextNode = (node: Node): void => {
+      const push = (node: Node): void => {
         const content = node.textContent ?? '';
         if (!content.length) return;
         segments.push({ node: node as Text, start: offset, end: offset + content.length });
@@ -193,248 +175,384 @@ export default defineContentScript({
 
       if (directOnly) {
         for (const node of element.childNodes) {
-          if (node.nodeType === Node.TEXT_NODE) pushTextNode(node);
+          if (node.nodeType === Node.TEXT_NODE) push(node);
         }
         return segments;
       }
 
       const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
       let node: Node | null;
-      while ((node = walker.nextNode())) {
-        pushTextNode(node);
-      }
+      while ((node = walker.nextNode())) push(node);
       return segments;
     }
 
-    function usableRects(rects: DOMRect[]): DOMRect[] {
-      return rects.filter(
-        (rect) => rect.width >= MIN_HITBOX_WIDTH && rect.height >= MIN_HITBOX_HEIGHT
-      );
-    }
-
     function buildHitboxes(element: Element, prices: DetectedPrice[]): PriceHitbox[] {
-      const positionalPrices = prices.filter(
-        (price): price is DetectedPrice & { matchStart: number; matchEnd: number; textSource: 'full' | 'direct' } =>
-          typeof price.matchStart === 'number' &&
-          typeof price.matchEnd === 'number' &&
-          (price.textSource === 'full' || price.textSource === 'direct')
+      const positional = prices.filter(
+        (p): p is DetectedPrice & { matchStart: number; matchEnd: number; textSource: 'full' | 'direct' } =>
+          typeof p.matchStart === 'number' &&
+          typeof p.matchEnd === 'number' &&
+          (p.textSource === 'full' || p.textSource === 'direct')
       );
+      if (!positional.length) return [];
 
-      if (!positionalPrices.length) return [];
-
-      const segments = collectTextSegments(element, positionalPrices[0].textSource === 'direct');
+      const segments = collectSegments(element, positional[0].textSource === 'direct');
       if (!segments.length) return [];
 
       const result: PriceHitbox[] = [];
-      let segmentIndex = 0;
+      let index = 0;
 
-      for (const price of positionalPrices) {
-        while (segmentIndex < segments.length && segments[segmentIndex].end <= price.matchStart) {
-          segmentIndex++;
-        }
+      for (const price of positional) {
+        while (index < segments.length && segments[index].end <= price.matchStart) index++;
+        if (index >= segments.length) break;
 
-        if (segmentIndex >= segments.length) break;
-
-        const startSegment = segments[segmentIndex];
+        const startSegment = segments[index];
         if (price.matchStart < startSegment.start || price.matchStart > startSegment.end) continue;
 
-        let endSegmentIndex = segmentIndex;
-        while (endSegmentIndex < segments.length && segments[endSegmentIndex].end < price.matchEnd) {
-          endSegmentIndex++;
-        }
+        let endIndex = index;
+        while (endIndex < segments.length && segments[endIndex].end < price.matchEnd) endIndex++;
+        if (endIndex >= segments.length) break;
 
-        if (endSegmentIndex >= segments.length) break;
-
-        const endSegment = segments[endSegmentIndex];
+        const endSegment = segments[endIndex];
         if (price.matchEnd < endSegment.start || price.matchEnd > endSegment.end) continue;
 
         const range = document.createRange();
         range.setStart(startSegment.node, price.matchStart - startSegment.start);
         range.setEnd(endSegment.node, price.matchEnd - endSegment.start);
 
-        const rects = usableRects([...range.getClientRects()]);
-        if (rects.length) result.push({ price, rects });
-        segmentIndex = endSegmentIndex;
+        // The Range is kept, not just its rects: scrolling moves the price and
+        // the tooltip has to follow it rather than vanish.
+        const measure = () => usableRects([...range.getClientRects()]);
+        const rects = measure();
+        if (rects.length) result.push({ price, measure, rects });
+        index = endIndex;
       }
       return result;
     }
 
-    function hitTest(x: number, y: number): number {
-      for (let i = 0; i < priceHitboxes.length; i++) {
-        for (const rect of priceHitboxes[i].rects) {
-          // Small vertical padding (4px) for easier targeting on single-line text
-          if (x >= rect.left && x <= rect.right && y >= rect.top - 4 && y <= rect.bottom + 4) {
-            return i;
+    /** Index of the hitbox under the pointer, and which of its rects. */
+    function hitTest(x: number, y: number): { index: number; rect: DOMRect } | null {
+      for (let i = 0; i < hitboxes.length; i++) {
+        for (const rect of hitboxes[i].rects) {
+          if (x >= rect.left - HIT_PAD && x <= rect.right + HIT_PAD &&
+              y >= rect.top - HIT_PAD && y <= rect.bottom + HIT_PAD) {
+            return { index: i, rect };
           }
         }
       }
-      return -1;
+      return null;
     }
 
-    function onMouseMove(e: MouseEvent): void {
-      if (mmRafId !== null) return;
-      mmRafId = requestAnimationFrame(() => {
-        mmRafId = null;
-        const idx = hitTest(e.clientX, e.clientY);
-        if (idx === activePriceIdx) return;
-        activePriceIdx = idx;
-        if (idx === -1) {
-          hideTooltip();
-        } else {
-          const { price, rects } = priceHitboxes[idx];
-          const r = rects[0];
-          showTooltip([price], r.left + r.width / 2, r.top, r.bottom);
-        }
+    function withinCard(x: number, y: number): boolean {
+      const rect = getCardRect();
+      if (!rect || rect.width === 0) return false;
+      return x >= rect.left - BRIDGE && x <= rect.right + BRIDGE &&
+             y >= rect.top - BRIDGE && y <= rect.bottom + BRIDGE;
+    }
+
+    // ── Showing ──────────────────────────────────────────────────────────────
+
+    /** A hover that landed before the rates did, replayed once they arrive. */
+    let pending: { price: DetectedPrice; rect: DOMRect } | null = null;
+
+    function show(price: DetectedPrice, rect: DOMRect): void {
+      if (!rates) {
+        pending = { price, rect };
+        ensureRates().then(() => {
+          const queued = pending;
+          pending = null;
+          if (queued && rates) show(queued.price, queued.rect);
+        });
+        return;
+      }
+
+      pending = null;
+      const conversions = convertPrice(price, rates, displayList(), settings.rounding);
+      // Nothing to say is not the same as an empty tooltip: a rate table that
+      // does not know this currency should stay silent.
+      if (!conversions.length) { hide(); return; }
+
+      ensureTooltip();
+      showTooltipState({
+        sources: [price],
+        allConversions: [conversions],
+        rounding: settings.rounding,
+        stale: ratesAreStale(),
+        x: rect.left + rect.width / 2,
+        y: rect.top,
+        yBottom: rect.bottom,
       });
     }
 
-    function clearMultiHover(): void {
-      if (mmRafId !== null) { cancelAnimationFrame(mmRafId); mmRafId = null; }
-      document.removeEventListener('mousemove', onMouseMove);
-      activeElement = null;
-      priceHitboxes = [];
-      activePriceIdx = -1;
+    function hide(): void {
+      pending = null;
+      hideTooltipState();
     }
 
-    // ── Event handlers ───────────────────────────────────────────────────────
+    function displayList(): string[] {
+      return [settings.baseCurrency, ...settings.targetCurrencies];
+    }
+
+    function isOwnCurrency(price: DetectedPrice): boolean {
+      return price.currencyCode === settings.baseCurrency ||
+             settings.targetCurrencies.includes(price.currencyCode);
+    }
+
+    // ── Pointer ──────────────────────────────────────────────────────────────
+
+    function clearHover(): void {
+      if (hoverTimer !== null) { clearTimeout(hoverTimer); hoverTimer = null; }
+      if (moveRaf !== null) { cancelAnimationFrame(moveRaf); moveRaf = null; }
+      document.removeEventListener('mousemove', onMouseMove);
+      activeElement = null;
+      hitboxes = [];
+      activeIndex = -1;
+    }
+
+    function arm(target: Element, x: number, y: number): void {
+      try {
+        let priceEl: Element = target;
+        let found = detectWithCache(target);
+        if (!found.length && target.parentElement && target.parentElement !== host) {
+          const parentPrices = detectWithCache(target.parentElement);
+          if (parentPrices.length) { found = parentPrices; priceEl = target.parentElement; }
+        }
+
+        const prices = found.filter((p) => !isOwnCurrency(p));
+        if (!prices.length) { hide(); return; }
+
+        activeElement = priceEl;
+        hitboxes = buildHitboxes(priceEl, prices);
+
+        // Semantic detection (itemprop, data-price) reports no text offsets, so
+        // it produces no range. Without this fallback those prices build no
+        // hitbox and silently never show a tooltip.
+        if (!hitboxes.length && prices[0].matchStart === undefined) {
+          const measure = () => usableRects([...priceEl.getClientRects()]);
+          const rects = measure();
+          if (rects.length) hitboxes = [{ price: prices[0], measure, rects }];
+        }
+        if (!hitboxes.length) { activeElement = null; return; }
+
+        document.addEventListener('mousemove', onMouseMove, { passive: true });
+
+        const hit = hitTest(x, y);
+        if (hit) {
+          activeIndex = hit.index;
+          show(hitboxes[hit.index].price, hit.rect);
+        }
+      } catch (err) {
+        E('arm failed', err);
+        clearHover();
+        hide();
+      }
+    }
 
     function onMouseOver(e: MouseEvent): void {
-      if (rafId !== null) cancelAnimationFrame(rafId);
+      const target = e.target as Element | null;
+      if (!target || target === host) return;
 
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        const target = e.target as Element | null;
-        if (!target || target === host) return;
+      // Inside the element we already armed: mousemove owns the decision.
+      if (activeElement && (target === activeElement || activeElement.contains(target))) return;
 
-        // Still inside the active multi-price element (entered a child) — let mousemove handle it
-        if (activeElement && (target === activeElement || activeElement.contains(target))) return;
+      if (hoverTimer !== null) clearTimeout(hoverTimer);
+      if (activeElement) clearHover();
 
-        // Left previous multi-price element
-        if (activeElement) clearMultiHover();
+      const { clientX: x, clientY: y } = e;
+      lastPointer = { x, y };
 
-        try {
-          // Try target first, then parent once — handles split DOM like <span>¥</span><span>348</span>
-          let priceEl: Element = target;
-          let allPrices = detectPricesWithCache(target);
-          if (!allPrices.length && target.parentElement && target.parentElement !== host) {
-            const parentPrices = detectPricesWithCache(target.parentElement);
-            if (parentPrices.length) { allPrices = parentPrices; priceEl = target.parentElement; }
-          }
-          const prices = allPrices.filter((p) => !cachedCurrencySet.has(p.currencyCode));
-          if (!prices.length) { hideTooltip(); return; }
+      // Hover intent. Everything expensive — textContent, the regex, building
+      // ranges — happens here and nowhere else, so sweeping the pointer across
+      // a page of prices costs nothing at all.
+      const delay = settings.hoverDelayMs;
+      if (delay <= 0) { arm(target, x, y); return; }
+      hoverTimer = setTimeout(() => {
+        hoverTimer = null;
+        if (target.isConnected) arm(target, x, y);
+      }, delay);
+    }
 
-          // Always use hitbox approach: tooltip shows only when cursor is over price text
-          activeElement = priceEl;
-          priceHitboxes = buildHitboxes(priceEl, prices);
+    function onMouseMove(e: MouseEvent): void {
+      lastPointer = { x: e.clientX, y: e.clientY };
+      if (moveRaf !== null) return;
+      moveRaf = requestAnimationFrame(() => {
+        moveRaf = null;
+        const { x, y } = lastPointer;
+        const hit = hitTest(x, y);
 
-          // Semantic detection (itemprop, data-price) reports a price with no
-          // offsets, so it produces no text range. Fall back to the element's
-          // own box, otherwise those prices would never show a tooltip at all.
-          // Regex matches always carry offsets, so they keep the tight hitbox.
-          if (!priceHitboxes.length && prices[0].matchStart === undefined) {
-            const rects = usableRects([...priceEl.getClientRects()]);
-            if (rects.length) priceHitboxes = [{ price: prices[0], rects }];
-          }
-
-          document.addEventListener('mousemove', onMouseMove, { passive: true });
-
-          // Show immediately if cursor is already over a price (entry position)
-          const idx = hitTest(e.clientX, e.clientY);
-          if (idx !== -1) {
-            activePriceIdx = idx;
-            const { price, rects } = priceHitboxes[idx];
-            const r = rects[0];
-            showTooltip([price], r.left + r.width / 2, r.top, r.bottom);
-          }
-        } catch (err) {
-          E('onMouseOver error', err);
-          hideTooltip();
+        if (!hit) {
+          // The pointer may be crossing the gap towards a tooltip it is allowed
+          // to click. Losing the tooltip halfway there would make copy useless.
+          if (activeIndex !== -1 && withinCard(x, y)) return;
+          if (activeIndex === -1) return;
+          activeIndex = -1;
+          hide();
+          return;
         }
+
+        if (hit.index === activeIndex) return;
+        activeIndex = hit.index;
+        show(hitboxes[hit.index].price, hit.rect);
       });
     }
 
     function onMouseOut(e: MouseEvent): void {
-      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+      if (hoverTimer !== null) { clearTimeout(hoverTimer); hoverTimer = null; }
 
-      // If moving to a child of activeElement, mouseover will handle it — don't clear yet
       const related = e.relatedTarget as Element | null;
-      if (activeElement && related && activeElement.contains(related)) return;
+      // Moving onto the tooltip itself, or deeper into the armed element.
+      if (related && (related === host || (activeElement && activeElement.contains(related)))) return;
+      if (related && withinCard(lastPointer.x, lastPointer.y)) return;
 
-      clearMultiHover();
-      hideTooltip();
+      clearHover();
+      hide();
     }
 
+    // ── Viewport ─────────────────────────────────────────────────────────────
+
+    function onViewportChange(): void {
+      if (hoverTimer !== null) { clearTimeout(hoverTimer); hoverTimer = null; }
+      if (!hitboxes.length) return;
+      if (viewportRaf !== null) return;
+
+      viewportRaf = requestAnimationFrame(() => {
+        viewportRaf = null;
+        // Scrolling used to hide the tooltip outright, so a nudge of the wheel
+        // while reading a price made it disappear until the pointer left the
+        // element and came back. The price moved; follow it.
+        for (const box of hitboxes) box.rects = box.measure();
+
+        if (activeIndex === -1) return;
+        const rects = hitboxes[activeIndex]?.rects ?? [];
+        if (!rects.length) { activeIndex = -1; hide(); return; }
+
+        const rect = rects.find((r) => r.bottom > 0 && r.top < window.innerHeight) ?? rects[0];
+        if (rect.bottom <= 0 || rect.top >= window.innerHeight) { activeIndex = -1; hide(); return; }
+
+        moveTooltipState(rect.left + rect.width / 2, rect.top, rect.bottom);
+      });
+    }
+
+    // ── Selection ────────────────────────────────────────────────────────────
+
     function onSelectionChange(): void {
-      if (selRafId !== null) cancelAnimationFrame(selRafId);
-      selRafId = requestAnimationFrame(() => {
-        selRafId = null;
+      if (selectionRaf !== null) cancelAnimationFrame(selectionRaf);
+      selectionRaf = requestAnimationFrame(() => {
+        selectionRaf = null;
         try {
           const selection = window.getSelection();
-          if (!selection || selection.isCollapsed) { hideTooltip(); return; }
+          if (!selection || selection.isCollapsed) return;
 
           const text = selection.toString().trim();
-          if (!text) { hideTooltip(); return; }
+          if (!text || text.length > 120) return;
 
-          const detected = detectPriceFromText(text);
-          if (!detected || cachedCurrencySet.has(detected.currencyCode)) { hideTooltip(); return; }
+          const detected = detectPriceFromText(text, resolver);
+          if (!detected || isOwnCurrency(detected)) return;
 
-          const range = selection.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          showTooltip([detected], rect.left + rect.width / 2, rect.top, rect.bottom);
+          const rect = selection.getRangeAt(0).getBoundingClientRect();
+          if (!rect.width && !rect.height) return;
+
+          clearHover();
+          show(detected, rect);
         } catch (err) {
-          E('onSelectionChange error', err);
-          hideTooltip();
+          E('selection handling failed', err);
         }
       });
     }
 
-    function onViewportChange(): void {
-      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
-      clearMultiHover();
-      hideTooltip();
+    // ── Inline mode ──────────────────────────────────────────────────────────
+
+    let annotator: ReturnType<typeof createInlineAnnotator> | null = null;
+
+    function syncInlineMode(): void {
+      if (settings.inlineMode && !annotator) {
+        annotator = createInlineAnnotator({
+          settings: () => settings,
+          rates: () => rates,
+          resolver: () => resolver,
+        });
+        // Inline mode is the one path that needs rates before any interaction.
+        ensureRates().then(() => annotator?.refresh());
+      } else if (!settings.inlineMode && annotator) {
+        annotator.destroy();
+        annotator = null;
+      } else {
+        annotator?.refresh();
+      }
     }
 
-    document.addEventListener('mouseover', onMouseOver, { passive: true });
-    document.addEventListener('mouseout', onMouseOut, { passive: true });
-    document.addEventListener('selectionchange', onSelectionChange, { passive: true });
-    document.addEventListener('scroll', onViewportChange, { passive: true, capture: true });
-    window.addEventListener('resize', onViewportChange, { passive: true });
+    // ── Wiring ───────────────────────────────────────────────────────────────
 
-    const onStorageChanged: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, areaName) => {
-      if (areaName !== 'local') return;
-      if (changes[STORAGE.RATES]) {
-        const next = parseRates(changes[STORAGE.RATES].newValue);
-        if (next) cachedRates = next;
-      }
-      if (changes[STORAGE.CURRENCIES]) {
-        setCachedCurrencies(changes[STORAGE.CURRENCIES].newValue as string[] | undefined);
-      }
-    };
+    let listening = false;
 
-    chrome.storage.onChanged.addListener(onStorageChanged);
+    function startListening(): void {
+      if (listening) return;
+      listening = true;
+      document.addEventListener('mouseover', onMouseOver, { passive: true });
+      document.addEventListener('mouseout', onMouseOut, { passive: true });
+      document.addEventListener('selectionchange', onSelectionChange, { passive: true });
+      document.addEventListener('scroll', onViewportChange, { passive: true, capture: true });
+      window.addEventListener('resize', onViewportChange, { passive: true });
+      syncInlineMode();
+    }
 
-    // 'pagehide' rather than the deprecated 'unload'. `persisted` means the page
-    // is only going into the back/forward cache and will come back with this
-    // script still loaded — tearing down there would kill the tooltip for the
-    // rest of that page's life.
-    window.addEventListener('pagehide', (event) => {
-      if (event.persisted) {
-        clearMultiHover();
-        hideTooltip();
-        return;
-      }
-
+    function stopListening(): void {
+      if (!listening) return;
+      listening = false;
       document.removeEventListener('mouseover', onMouseOver);
       document.removeEventListener('mouseout', onMouseOut);
       document.removeEventListener('selectionchange', onSelectionChange);
       document.removeEventListener('scroll', onViewportChange, true);
       window.removeEventListener('resize', onViewportChange);
-      chrome.storage.onChanged.removeListener(onStorageChanged);
-      if (selRafId !== null) { cancelAnimationFrame(selRafId); selRafId = null; }
-      clearMultiHover();
-      hideTooltip();
-      unmount(tooltipInstance);
-      host.remove();
+      if (selectionRaf !== null) { cancelAnimationFrame(selectionRaf); selectionRaf = null; }
+      if (viewportRaf !== null) { cancelAnimationFrame(viewportRaf); viewportRaf = null; }
+      clearHover();
+      hide();
+      annotator?.destroy();
+      annotator = null;
+      destroyTooltipHost();
+    }
+
+    function applySettings(next: Settings): void {
+      const wasActive = isActiveOn(settings, hostname);
+      settings = next;
+      refreshResolver();
+
+      const active = isActiveOn(settings, hostname);
+      if (!active) { stopListening(); return; }
+
+      if (!wasActive) { startListening(); return; }
+
+      // A changed resolver or currency list invalidates every cached detection.
+      clearHover();
+      hide();
+      syncInlineMode();
+    }
+
+    const unwatch = watchSettings(applySettings);
+
+    const onRatesChanged: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
+      if (area !== 'local') return;
+      if (changes[STORAGE.RATES]) {
+        const next = parseRates(changes[STORAGE.RATES].newValue);
+        if (next) rates = next;
+      }
+      if (changes[STORAGE.RATES_TS]) {
+        const ts = changes[STORAGE.RATES_TS].newValue;
+        if (typeof ts === 'number') ratesTimestamp = ts;
+      }
+    };
+    chrome.storage.onChanged.addListener(onRatesChanged);
+
+    if (isActiveOn(settings, hostname)) startListening();
+
+    // 'pagehide' rather than the deprecated 'unload'. `persisted` means the page
+    // is going into the back/forward cache with this script still loaded, so
+    // tearing down would kill the tooltip for the rest of that page's life.
+    window.addEventListener('pagehide', (event) => {
+      if (event.persisted) { clearHover(); hide(); return; }
+      stopListening();
+      unwatch();
+      chrome.storage.onChanged.removeListener(onRatesChanged);
     });
   },
 });

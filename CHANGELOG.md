@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.4.0
+
+### Correctness
+
+- `$` no longer always means US dollars. On a country domain, or a page whose `lang` names a region, `$`, `kr` and `¥` are read as the local currency — `$49` on a `.ca` site is Canadian, `1 099 kr` on a `.no` site is Norwegian, `¥` on a `.cn` site is yuan. The tooltip says when it made that call. This was the one thing the extension got confidently, silently wrong. Switch it off under Behaviour if you prefer the old reading.
+- Vanity ccTLDs (`.co`, `.io`, `.ai`, `.me`, `.tv`, `.to`) are deliberately not treated as country signals.
+- Price ranges are understood: `€10 – €20`, `€10-20` and `10-20 kr` convert as one range instead of one price, or none. `€10-20% off` is still a single price.
+- Every currency now rounds to its own minor unit. `KWD 12.500` was truncated to two decimals because the formatter hardcoded a cap for everything but JPY and KRW.
+- Added ISK, so `kr` can resolve to all four krona currencies.
+
+### Interface
+
+- A hover delay, 180 ms by default. Sweeping the pointer across a page of prices no longer flashes a tooltip on every one of them — and does no detection work either.
+- Scrolling moves the tooltip with the price instead of dismissing it. A nudge of the wheel used to hide it until you left the element and came back.
+- The tooltip can be clicked: a click on any row copies the amount.
+- Your own currency is an explicit setting now, shown first in the tooltip and never converted away from. The popup lists your chosen currencies before the other forty.
+- The tooltip flips below a price only when it actually fits below. It used to flip whenever it did not fit above, and clip off the bottom of the screen.
+- Keyboard focus is visible in the popup. The checkbox is a clipped pixel for screen readers, and nothing drew a ring for it, so tabbing through the list showed nothing at all.
+- Optional rounding. A conversion is an estimate; `≈€1,235` says so where `€1,234.56` pretends otherwise.
+- Rate freshness is visible in the popup and the options page, with a refresh button, and the tooltip warns when rates are more than two days old.
+- A first install opens the options page instead of leaving an unexplained icon in the toolbar.
+
+### Features
+
+- A master switch and a per-site pause, both reachable from the popup. A misfire on one site no longer means uninstalling.
+- Inline mode: PriceHover can write your currency beside every price on the page instead of waiting for a hover. It only ever appends — the site's own text is never rewritten — and it skips editable fields, `code`, `pre` and anything machine-read.
+- A full options page: currencies with drag-free reordering, behaviour, paused sites, rates and privacy.
+- Translated into English, French, Spanish, German, Brazilian Portuguese, Italian, Japanese and Simplified Chinese. Amounts are formatted in the browser's language too.
+
+### Performance
+
+- Text with no digit in it is skipped before the regex runs. That is most of the text on most pages, and it takes a hover over a paragraph from 160 µs to 0.1 µs.
+- The tooltip and its shadow root are built on the first price found, not on every page load. Pages with no price now mount nothing.
+- Semantic markup is checked with one selector match instead of walking six ancestors and reading four attributes from each.
+- Exchange rates are read from storage on first need rather than on every page load.
+- The tooltip measures itself once per layout, not on every reposition.
+
+### Permissions
+
+- Added `activeTab`, which is what lets the popup name the site you are on so you can pause it. It grants access to one tab, only when you click the extension icon, and shows no install warning. The extension still contacts exactly one host.
+
 ## 1.3.0
 
 ### Privacy

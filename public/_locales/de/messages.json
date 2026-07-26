@@ -1,0 +1,191 @@
+{
+  "extName": {
+    "message": "PriceHover"
+  },
+  "extDescription": {
+    "message": "Fahren Sie über einen Preis, um ihn in Ihrer Währung zu sehen."
+  },
+  "searchPlaceholder": {
+    "message": "Suchen oder Preis eingeben…"
+  },
+  "searchLabel": {
+    "message": "Währungen suchen"
+  },
+  "noResults": {
+    "message": "Keine Treffer"
+  },
+  "baseCurrency": {
+    "message": "Ihre Währung"
+  },
+  "baseCurrencyHelp": {
+    "message": "Preise, die bereits in dieser Währung stehen, bleiben unberührt."
+  },
+  "convertTo": {
+    "message": "Umrechnen in"
+  },
+  "convertToHelp": {
+    "message": "Erscheinen im Tooltip unter Ihrer Währung."
+  },
+  "shownCount": {
+    "message": "$1 angezeigt"
+  },
+  "settings": {
+    "message": "Einstellungen"
+  },
+  "ratesUpdated": {
+    "message": "Kurse $1"
+  },
+  "ratesNever": {
+    "message": "Kurse nicht geladen"
+  },
+  "ratesStale": {
+    "message": "Kurse möglicherweise veraltet"
+  },
+  "refresh": {
+    "message": "Aktualisieren"
+  },
+  "refreshing": {
+    "message": "Wird aktualisiert…"
+  },
+  "refreshFailed": {
+    "message": "Aktualisierung fehlgeschlagen"
+  },
+  "timeJustNow": {
+    "message": "gerade eben"
+  },
+  "timeMinutes": {
+    "message": "vor $1 Min."
+  },
+  "timeHours": {
+    "message": "vor $1 Std."
+  },
+  "timeDays": {
+    "message": "vor $1 T."
+  },
+  "tooltipNoCurrencies": {
+    "message": "Keine Währungen gewählt"
+  },
+  "tooltipChooseCurrencies": {
+    "message": "Einstellungen öffnen"
+  },
+  "tooltipInferred": {
+    "message": "Währung aus dem Land dieser Website abgeleitet"
+  },
+  "tooltipCopyHint": {
+    "message": "Zum Kopieren klicken"
+  },
+  "tooltipCopied": {
+    "message": "Kopiert"
+  },
+  "extensionOff": {
+    "message": "PriceHover ist aus"
+  },
+  "turnOn": {
+    "message": "Einschalten"
+  },
+  "turnOff": {
+    "message": "Ausschalten"
+  },
+  "pauseOnSite": {
+    "message": "Auf $1 pausieren"
+  },
+  "resumeOnSite": {
+    "message": "Auf $1 fortsetzen"
+  },
+  "pausedOnSite": {
+    "message": "Auf $1 pausiert"
+  },
+  "optionsTitle": {
+    "message": "PriceHover-Einstellungen"
+  },
+  "sectionCurrencies": {
+    "message": "Währungen"
+  },
+  "sectionBehaviour": {
+    "message": "Verhalten"
+  },
+  "sectionSites": {
+    "message": "Websites"
+  },
+  "sectionAbout": {
+    "message": "Über"
+  },
+  "hoverDelay": {
+    "message": "Verzögerung beim Überfahren"
+  },
+  "hoverDelayHelp": {
+    "message": "Wie lange der Zeiger stillstehen muss, bevor der Tooltip erscheint. Länger heißt weniger aufblitzende Tooltips beim Lesen."
+  },
+  "delayInstant": {
+    "message": "Sofort"
+  },
+  "rounding": {
+    "message": "Rundung"
+  },
+  "roundingHelp": {
+    "message": "Ein umgerechneter Preis ist eine Schätzung. Weniger Stellen sagen das."
+  },
+  "roundingExact": {
+    "message": "Genau"
+  },
+  "roundingSmart": {
+    "message": "Intelligent"
+  },
+  "roundingInteger": {
+    "message": "Ganze Zahlen"
+  },
+  "inlineMode": {
+    "message": "Preise auf der Seite ersetzen"
+  },
+  "inlineModeHelp": {
+    "message": "Zeigt Ihre Währung neben jedem Preis, ohne Überfahren. Der Tooltip zeigt weiterhin die ganze Liste."
+  },
+  "pageContext": {
+    "message": "$$, kr und ¥ nach dem Land der Website lesen"
+  },
+  "pageContextHelp": {
+    "message": "Auf einer .ca-Domain heißt $$ kanadischer Dollar, auf .no heißt kr norwegische Krone. Aus bedeutet immer USD und SEK."
+  },
+  "enabledEverywhere": {
+    "message": "Aktiviert"
+  },
+  "enabledEverywhereHelp": {
+    "message": "Aus bedeutet, PriceHover tut auf keiner Seite etwas."
+  },
+  "pausedSites": {
+    "message": "Pausierte Websites"
+  },
+  "pausedSitesEmpty": {
+    "message": "Keine Website pausiert."
+  },
+  "addSitePlaceholder": {
+    "message": "beispiel.de"
+  },
+  "add": {
+    "message": "Hinzufügen"
+  },
+  "remove": {
+    "message": "Entfernen"
+  },
+  "reset": {
+    "message": "Zurücksetzen"
+  },
+  "version": {
+    "message": "Version $1"
+  },
+  "privacyPolicy": {
+    "message": "Datenschutzerklärung"
+  },
+  "privacyNote": {
+    "message": "PriceHover kontaktiert genau einen Host, open.er-api.com, für Wechselkurse. Nichts über die von Ihnen besuchten Seiten verlässt den Browser."
+  },
+  "welcomeTitle": {
+    "message": "PriceHover ist bereit"
+  },
+  "welcomeBody": {
+    "message": "Wählen Sie unten Ihre Währung und fahren Sie über einen beliebigen Preis."
+  },
+  "welcomeDismiss": {
+    "message": "Verstanden"
+  }
+}

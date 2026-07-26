@@ -2,10 +2,12 @@
 
 .ph-card {
   --bg: #111111;
+  --bg2: #1e1e1e;
   --border: #2a2a2a;
   --fg: #f0f0f0;
-  --fg2: #888888;
+  --fg2: #8f8f8f;
   --green: #5fcc6f;
+  --warn: #e0a23c;
 
   position: fixed;
   z-index: 2147483647;
@@ -14,26 +16,34 @@
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 9px 12px;
-  min-width: 140px;
-  max-width: 240px;
+  padding: 9px 0 4px;
+  min-width: 150px;
+  max-width: 260px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.35);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   font-size: 12px;
   line-height: 1.5;
-  pointer-events: none;
+  /* Clickable, so an amount can be copied. The content script keeps the tooltip
+     alive while the pointer is inside this rect. */
+  pointer-events: auto;
   animation: ph-in 0.12s ease-out;
 }
 
 @media (prefers-color-scheme: light) {
   .ph-card {
     --bg: #ffffff;
+    --bg2: #f4f4f4;
     --border: #e0e0e0;
     --fg: #111111;
-    --fg2: #666666;
+    --fg2: #616161;
     --green: #1a8c2a;
+    --warn: #9a6410;
     box-shadow: 0 4px 16px rgba(0,0,0,0.12);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ph-card { animation: none; }
 }
 
 @keyframes ph-in {
@@ -46,12 +56,7 @@
   to   { opacity: 1; transform: translate(-50%, 8px); }
 }
 
-.ph-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-}
+.ph-header { padding: 0 12px; }
 
 .ph-source {
   font-size: 11px;
@@ -61,24 +66,32 @@
 .ph-divider {
   height: 1px;
   background: var(--border);
-  margin: 0 -12px 6px;
+  margin: 6px 0 4px;
 }
 
 .ph-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
 }
 
 .ph-item {
   display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 3px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
+.ph-item:hover, .ph-item:focus-visible { background: var(--bg2); outline: none; }
+.ph-item:focus-visible { box-shadow: inset 2px 0 0 var(--green); }
 
 .ph-flag {
   width: 16px;
@@ -86,26 +99,68 @@
   object-fit: cover;
   border-radius: 1px;
   flex-shrink: 0;
+  align-self: center;
 }
 
-.ph-flag-fb {
-  font-size: 12px;
-  line-height: 1;
-}
-
-.ph-item-amount {
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--green);
-}
+.ph-flag-fb { font-size: 12px; line-height: 1; }
 
 .ph-item-code {
   font-size: 11px;
   color: var(--fg2);
+  flex-shrink: 0;
+  min-width: 26px;
+}
+
+.ph-item-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+.ph-item-amount {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--green);
+  white-space: nowrap;
+}
+
+/* The user's own currency: the answer they came for. The rest is context. */
+.ph-base .ph-item-amount { font-weight: 700; font-size: 14px; }
+
+.ph-copied {
+  font-size: 10px;
+  color: var(--fg2);
+  flex-shrink: 0;
 }
 
 .ph-empty {
+  margin: 0;
+  padding: 0 12px;
   color: var(--fg2);
   font-size: 11px;
-  font-style: italic;
 }
+
+.ph-action {
+  display: block;
+  margin: 6px 12px 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg2);
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ph-action:hover { border-color: var(--fg2); }
+
+.ph-note {
+  margin: 4px 0 0;
+  padding: 4px 12px 0;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--fg2);
+}
+.ph-warn { color: var(--warn); }

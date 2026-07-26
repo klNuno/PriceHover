@@ -1,213 +1,205 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { convertPrice } from '../../src/convert';
   import { CURRENCIES, CURRENCY_BY_CODE, flagToCountryCode } from '../../src/currencies';
   import { flagImage } from '../../src/flags';
-  import { STORAGE, DEFAULT_CURRENCIES } from '../../src/types';
-  import { detectPriceFromText } from '../../src/detector';
-  import { formatCurrencyAmount } from '../../src/formatter';
+  import { t } from '../../src/i18n';
+  import { MESSAGE, send } from '../../src/messages';
+  import { parseQuery } from '../../src/query';
   import { parseRates } from '../../src/rates';
-  import type { DetectedPrice, ExchangeRates } from '../../src/types';
+  import {
+    DEFAULT_SETTINGS, isSiteDisabled, loadSettings, normalizeHostname, saveSettings,
+  } from '../../src/settings';
+  import type { Settings } from '../../src/settings';
+  import { formatAgo } from '../../src/time';
+  import { STALE_AFTER_MS, STORAGE } from '../../src/types';
+  import type { ExchangeRates } from '../../src/types';
 
-  interface TargetedConversionQuery {
-    source: DetectedPrice;
-    targetCode: string;
-  }
-
-  // Build alias map automatically from CURRENCIES names (first match wins = most common first).
-  // Skips generic geographic words. Adds plurals and a few informal names.
-  const CURRENCY_ALIASES = (() => {
-    const skip = new Set(['us', 'uk', 'new', 'south', 'north', 'east', 'west', 'hong',
-      'kong', 'saudi', 'united', 'arab', 'emirates', 'costa', 'rica', 'de', 'and']);
-    const map = new Map<string, string>();
-    for (const c of CURRENCIES) {
-      map.set(c.code.toLowerCase(), c.code);
-      for (const word of c.name.toLowerCase().split(/\s+/)) {
-        if (word.length > 2 && !skip.has(word) && !map.has(word)) {
-          map.set(word, c.code);
-          if (!word.endsWith('s')) map.set(word + 's', c.code); // simple plural
-        }
-      }
-    }
-    // Informal names not derivable from official names
-    for (const [alias, code] of [
-      ['dol', 'USD'], ['buck', 'USD'], ['bucks', 'USD'],
-      ['rouble', 'RUB'], ['roubles', 'RUB'],
-      ['sterling', 'GBP'],
-      ['rmb', 'CNY'], ['renminbi', 'CNY'],
-      ['reais', 'BRL'],
-      ['hryvnia', 'UAH'], ['hry', 'UAH'],
-    ] as [string, string][]) {
-      if (!map.has(alias)) map.set(alias, code);
-    }
-    return map;
-  })();
-
-  function resolveCurrencyCode(token: string): string | null {
-    const normalized = token.trim().toLowerCase();
-    if (!normalized) return null;
-
-    const fromAlias = CURRENCY_ALIASES.get(normalized);
-    if (fromAlias) return fromAlias;
-
-    const upper = normalized.toUpperCase();
-    return CURRENCY_BY_CODE.has(upper) ? upper : null;
-  }
-
-  function normalizeQuery(q: string): string {
-    const m = q.match(/^([\d,.]+)\s+([a-zÀ-ÿ]+)$|^([a-zÀ-ÿ]+)\s+([\d,.]+)$/i);
-    if (!m) return q;
-    const [amount, word] = m[1] ? [m[1], m[2]] : [m[4], m[3]];
-    const code = resolveCurrencyCode(word);
-    return code ? `${amount} ${code}` : q;
-  }
-
-  function parseTargetedConversionQuery(q: string): TargetedConversionQuery | null {
-    const tokens = q.trim().split(/\s+/).filter(Boolean);
-    if (tokens.length !== 3) return null;
-
-    const amountIndex = tokens.findIndex((token) => /^[\d,.]+$/.test(token));
-    if (amountIndex === -1) return null;
-
-    const amountToken = tokens[amountIndex];
-    const currencyTokens = tokens.filter((_, index) => index !== amountIndex);
-    const sourceCode = resolveCurrencyCode(currencyTokens[0]);
-    const targetCode = resolveCurrencyCode(currencyTokens[1]);
-    if (!sourceCode || !targetCode || sourceCode === targetCode) return null;
-
-    const source =
-      detectPriceFromText(`${amountToken} ${sourceCode}`) ??
-      detectPriceFromText(`${sourceCode} ${amountToken}`);
-
-    return source ? { source, targetCode } : null;
-  }
-
-  let selectedCodes = $state<string[]>(DEFAULT_CURRENCIES);
+  let settings = $state<Settings>({ ...DEFAULT_SETTINGS });
   let rates = $state<ExchangeRates | null>(null);
-  let searchQuery = $state('');
+  let ratesTimestamp = $state(0);
+  let query = $state('');
+  let hostname = $state('');
+  let refreshing = $state(false);
+  let error = $state('');
+  let loaded = $state(false);
 
-  let err = $state('');
-
-  // Shown in the header. Read from the manifest so it can never drift.
   const version = chrome.runtime.getManifest().version;
-
-  function storageGet(keys: string[]): Promise<Record<string, unknown>> {
-    return new Promise((resolve, reject) => {
-      chrome.storage.local.get(keys, (r) => {
-        if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-        else resolve(r ?? {});
-      });
-    });
-  }
-
-  function storageSet(data: Record<string, unknown>): Promise<void> {
-    return new Promise((resolve, reject) => {
-      chrome.storage.local.set(data, () => {
-        if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-        else resolve();
-      });
-    });
-  }
 
   onMount(async () => {
     try {
-      const r = await storageGet([STORAGE.CURRENCIES, STORAGE.RATES]);
-      if (r[STORAGE.CURRENCIES]) selectedCodes = r[STORAGE.CURRENCIES] as string[];
-      rates = parseRates(r[STORAGE.RATES]);
-    } catch (e) { err = `load: ${e}`; }
-  });
+      settings = await loadSettings();
+      const stored = await chrome.storage.local.get([STORAGE.RATES, STORAGE.RATES_TS]);
+      rates = parseRates(stored?.[STORAGE.RATES]);
+      const ts = stored?.[STORAGE.RATES_TS];
+      ratesTimestamp = typeof ts === 'number' ? ts : 0;
+    } catch (e) {
+      error = String(e);
+    }
 
-  async function save(): Promise<void> {
+    // `activeTab` gives the URL only because the user just clicked the icon,
+    // which is exactly the gesture that should unlock a per-site switch.
     try {
-      await storageSet({ [STORAGE.CURRENCIES]: [...selectedCodes] });
-    } catch (e) { err = `save: ${e}`; }
-  }
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.url) {
+        const url = new URL(tab.url);
+        if (url.protocol === 'http:' || url.protocol === 'https:') {
+          hostname = normalizeHostname(url.hostname);
+        }
+      }
+    } catch { /* no activeTab grant, or an internal page */ }
 
-  async function toggleCurrency(code: string): Promise<void> {
-    selectedCodes = selectedCodes.includes(code)
-      ? selectedCodes.filter((c) => c !== code)
-      : [...selectedCodes, code];
-    await save();
-  }
-
-  const targetedConversion = $derived.by(() => parseTargetedConversionQuery(searchQuery));
-
-  // Detect if search is a price expression → calculator mode
-  const parsed = $derived.by(() => {
-    const q = searchQuery.trim();
-    return targetedConversion?.source ?? detectPriceFromText(q) ?? detectPriceFromText(normalizeQuery(q));
+    loaded = true;
   });
-  const isCalcMode = $derived(parsed !== null);
 
-  // Calc mode: all currencies. Search mode: filter by text. Default: all.
+  async function update(patch: Partial<Settings>): Promise<void> {
+    settings = { ...settings, ...patch };
+    try {
+      await saveSettings(settings);
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  const siteDisabled = $derived(hostname ? isSiteDisabled(settings, hostname) : false);
+
+  function toggleSite(): void {
+    if (!hostname) return;
+    update({
+      disabledSites: siteDisabled
+        ? settings.disabledSites.filter((s) => s !== hostname)
+        : [...settings.disabledSites, hostname],
+    });
+  }
+
+  function toggleTarget(code: string): void {
+    if (code === settings.baseCurrency) return;
+    update({
+      targetCurrencies: settings.targetCurrencies.includes(code)
+        ? settings.targetCurrencies.filter((c) => c !== code)
+        : [...settings.targetCurrencies, code],
+    });
+  }
+
+  async function refresh(): Promise<void> {
+    refreshing = true;
+    const result = await send<{ ok: boolean; timestamp?: number }>(MESSAGE.REFRESH_RATES);
+    refreshing = false;
+
+    if (!result?.ok) { error = t('refreshFailed'); return; }
+    error = '';
+    const stored = await chrome.storage.local.get([STORAGE.RATES, STORAGE.RATES_TS]);
+    rates = parseRates(stored?.[STORAGE.RATES]);
+    ratesTimestamp = result.timestamp ?? Date.now();
+  }
+
+  const parsed = $derived(parseQuery(query, settings.baseCurrency));
+  const isCalc = $derived(parsed.price !== null);
+  const stale = $derived(ratesTimestamp > 0 && Date.now() - ratesTimestamp > STALE_AFTER_MS);
+
+  const ratesLabel = $derived(
+    ratesTimestamp === 0 ? t('ratesNever') : t('ratesUpdated', formatAgo(ratesTimestamp))
+  );
+
+  /**
+   * Chosen currencies come first, in the order they are shown in the tooltip.
+   * They used to be scattered through 44 alphabetically-fixed rows, which meant
+   * scrolling to find the three the user actually picked.
+   */
+  const orderedCurrencies = $derived.by(() => {
+    const chosen = [settings.baseCurrency, ...settings.targetCurrencies];
+    const rank = new Map(chosen.map((code, index) => [code, index]));
+    return [...CURRENCIES].sort((a, b) => {
+      const ra = rank.get(a.code) ?? Number.MAX_SAFE_INTEGER;
+      const rb = rank.get(b.code) ?? Number.MAX_SAFE_INTEGER;
+      return ra - rb;
+    });
+  });
+
   const visibleCurrencies = $derived.by(() => {
-    if (targetedConversion) {
-      const currency = CURRENCY_BY_CODE.get(targetedConversion.targetCode);
+    if (parsed.targetCode) {
+      const currency = CURRENCY_BY_CODE.get(parsed.targetCode);
       return currency ? [currency] : [];
     }
-
-    if (!isCalcMode && searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      return CURRENCIES.filter(c =>
-        c.code.toLowerCase().includes(query) ||
-        c.name.toLowerCase().includes(query)
+    if (parsed.filter) {
+      return orderedCurrencies.filter(
+        (c) =>
+          c.code.toLowerCase().includes(parsed.filter) ||
+          c.name.toLowerCase().includes(parsed.filter)
       );
     }
-
-    return CURRENCIES;
+    return orderedCurrencies;
   });
 
-  // Precomputed conversion map: code → formatted string (all currencies in calc mode)
-  const conversionMap = $derived.by(() => {
+  /** code → formatted amount, for whichever currencies are on screen. */
+  const conversions = $derived.by(() => {
     const map = new Map<string, string>();
-    if (!parsed || !rates) return map;
-    const sourceRate = rates[parsed.currencyCode];
-    if (!sourceRate) return map;
+    if (!parsed.price || !rates) return map;
 
-    const targetCodes = targetedConversion
-      ? [targetedConversion.targetCode]
-      : CURRENCIES.map(({ code }) => code);
-
-    for (const code of targetCodes) {
-      if (code === parsed.currencyCode) continue;
-      const targetRate = rates[code];
-      const currency = CURRENCY_BY_CODE.get(code);
-      if (!targetRate || !currency) continue;
-      const amount = parsed.amount * (targetRate / sourceRate);
-      map.set(code, formatCurrencyAmount(amount, code));
+    const codes = visibleCurrencies.map((c) => c.code);
+    for (const converted of convertPrice(parsed.price, rates, codes, settings.rounding)) {
+      map.set(
+        converted.currency.code,
+        converted.formattedMax ? `${converted.formatted} – ${converted.formattedMax}` : converted.formatted
+      );
     }
     return map;
   });
+
+  function roleOf(code: string): 'base' | 'target' | null {
+    if (code === settings.baseCurrency) return 'base';
+    return settings.targetCurrencies.includes(code) ? 'target' : null;
+  }
 </script>
 
 <div class="popup">
-  <header class="header">
+  <header>
     <span class="title">PriceHover</span>
     <span class="version">v{version}</span>
-    <span class="count">{selectedCodes.length} selected</span>
+    <button class="icon" type="button" title={t('settings')} onclick={() => send(MESSAGE.OPEN_OPTIONS)}>
+      {t('settings')}
+    </button>
   </header>
 
+  {#if loaded && !settings.enabled}
+    <div class="banner">
+      <span>{t('extensionOff')}</span>
+      <button type="button" onclick={() => update({ enabled: true })}>{t('turnOn')}</button>
+    </div>
+  {:else if hostname}
+    <div class="banner" class:muted={!siteDisabled}>
+      <span>{siteDisabled ? t('pausedOnSite', hostname) : hostname}</span>
+      <button type="button" onclick={toggleSite}>
+        {siteDisabled ? t('resumeOnSite', hostname) : t('pauseOnSite', hostname)}
+      </button>
+    </div>
+  {/if}
+
   <div class="search-wrap">
+    <!-- svelte-ignore a11y_autofocus -->
     <input
-      type="search"
+      type="text"
       class="search"
-      placeholder="Search or type a price…"
-      aria-label="Search currencies"
-      bind:value={searchQuery}
+      placeholder={t('searchPlaceholder')}
+      aria-label={t('searchLabel')}
+      autofocus
+      bind:value={query}
     />
   </div>
 
   <ul class="list">
     {#each visibleCurrencies as currency (currency.code)}
-      {@const selected = selectedCodes.includes(currency.code)}
-      {@const converted = conversionMap.get(currency.code)}
+      {@const role = roleOf(currency.code)}
+      {@const converted = conversions.get(currency.code)}
       {@const flagSrc = flagImage(flagToCountryCode(currency.flag))}
       <li>
-        <label class="row" class:selected={selected && !isCalcMode} class:has-value={!!converted}>
+        <label class="row" class:base={role === 'base'} class:target={role === 'target'}>
           <input
             type="checkbox"
             class="sr-only"
-            checked={selected}
-            onchange={() => toggleCurrency(currency.code)}
+            checked={role !== null}
+            disabled={role === 'base'}
+            onchange={() => toggleTarget(currency.code)}
           />
           {#if flagSrc}
             <img class="flag" src={flagSrc} alt="" />
@@ -217,26 +209,30 @@
           <span class="code">{currency.code}</span>
           <span class="name">{currency.name}</span>
           <span class="right">
-            {#if isCalcMode}
-              {#if converted}
-                <span class="amount">{converted}</span>
-              {:else if !selected}
-                <!-- unselected in calc mode: nothing -->
-              {:else}
-                <span class="loading">…</span>
-              {/if}
-            {:else if selected}
-              <span class="check">✓</span>
+            {#if isCalc && converted}
+              <span class="amount">{converted}</span>
+            {:else if role === 'base'}
+              <span class="tag">{t('baseCurrency')}</span>
+            {:else if role === 'target'}
+              <span class="check" aria-hidden="true">✓</span>
             {/if}
           </span>
         </label>
       </li>
     {/each}
     {#if visibleCurrencies.length === 0}
-      <li class="empty">No results</li>
+      <li class="empty">{t('noResults')}</li>
     {/if}
   </ul>
-  {#if err}<div class="err">{err}</div>{/if}
+
+  <footer>
+    <span class="rates" class:warn={stale}>{ratesLabel}</span>
+    <button class="link" type="button" onclick={refresh} disabled={refreshing}>
+      {refreshing ? t('refreshing') : t('refresh')}
+    </button>
+  </footer>
+
+  {#if error}<div class="err">{error}</div>{/if}
 </div>
 
 <style>
@@ -248,10 +244,12 @@
     --bg2: #f5f5f5;
     --bg3: #ebebeb;
     --fg: #111111;
-    --fg2: #666666;
+    --fg2: #616161;
     --accent: #000000;
     --border: #e0e0e0;
     --green: #1a8c2a;
+    --warn: #9a6410;
+    --focus: #2b6cff;
   }
   @media (prefers-color-scheme: dark) {
     :global(:root) {
@@ -259,16 +257,18 @@
       --bg2: #1c1c1c;
       --bg3: #272727;
       --fg: #f0f0f0;
-      --fg2: #888888;
+      --fg2: #8f8f8f;
       --accent: #ffffff;
       --border: #2a2a2a;
       --green: #5fcc6f;
+      --warn: #e0a23c;
+      --focus: #6ea0ff;
     }
   }
 
   .popup {
-    width: 320px;
-    max-height: 380px;
+    width: 330px;
+    max-height: 480px;
     background: var(--bg);
     color: var(--fg);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -278,72 +278,102 @@
     overflow: hidden;
   }
 
-  .header {
+  header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 10px 14px 9px;
+    gap: 6px;
+    padding: 10px 12px 9px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
   .title { font-weight: 700; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; }
-  .version { font-size: 10px; color: var(--fg2); font-weight: 400; margin-right: auto; margin-left: 6px; }
-  .count { font-size: 11px; color: var(--fg2); }
+  .version { font-size: 10px; color: var(--fg2); margin-right: auto; }
 
-  .search-wrap {
-    padding: 7px 10px;
+  .banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 11px;
+    background: var(--bg3);
     border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
   }
+  .banner span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: auto; }
+  .banner.muted { background: var(--bg2); color: var(--fg2); }
+
+  button {
+    font: inherit;
+    font-size: 11px;
+    color: var(--fg);
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button:hover:not(:disabled) { border-color: var(--fg2); }
+  button:disabled { opacity: 0.6; cursor: default; }
+  button.link { background: none; border: 0; padding: 3px 4px; color: var(--fg2); text-decoration: underline; }
+
+  .search-wrap { padding: 7px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .search {
     width: 100%;
     background: var(--bg2);
     border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 5px 8px;
+    padding: 6px 8px;
     color: var(--fg);
+    font: inherit;
     font-size: 12px;
     outline: none;
   }
-  .search:focus { border-color: var(--accent); }
+  .search:focus { border-color: var(--focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 25%, transparent); }
   .search::placeholder { color: var(--fg2); }
-  .search::-webkit-search-cancel-button { -webkit-appearance: none; }
 
-  .list {
-    flex: 1;
-    overflow-y: auto;
-    list-style: none;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
+  .list { flex: 1; overflow-y: auto; list-style: none; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 
   .row {
     display: grid;
     grid-template-columns: 22px 38px 1fr auto;
     align-items: center;
     gap: 0 8px;
-    padding: 6px 14px;
+    padding: 6px 12px;
     cursor: pointer;
     user-select: none;
-    transition: background 0.08s;
   }
   .row:hover { background: var(--bg2); }
-  .row.selected { background: var(--bg3); }
-  .row.has-value { background: var(--bg2); }
+  .row.target { background: var(--bg2); }
+  .row.base { background: var(--bg3); cursor: default; }
+  /* The checkbox is clipped to a pixel for screen readers, so the visible focus
+     ring has to come from its label. Without this, tabbing through 44 rows
+     showed nothing at all. */
+  .row:focus-within { outline: 2px solid var(--focus); outline-offset: -2px; }
 
-  .flag { width: 20px; height: 15px; object-fit: cover; border-radius: 2px; flex-shrink: 0; }
+  .flag { width: 20px; height: 15px; object-fit: cover; border-radius: 2px; }
   .flag-fb { font-size: 14px; line-height: 1; }
   .code { font-weight: 600; font-size: 12px; }
   .name { color: var(--fg2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .right { text-align: right; min-width: 0; }
   .check { font-size: 11px; font-weight: 700; color: var(--accent); }
+  .tag { font-size: 10px; color: var(--fg2); text-transform: uppercase; letter-spacing: 0.04em; }
   .amount { font-size: 12px; font-weight: 600; color: var(--green); white-space: nowrap; }
-  .loading { font-size: 11px; color: var(--fg2); }
 
-  .empty { padding: 14px; color: var(--fg2); font-size: 12px; }
-  .err { padding: 4px 14px; font-size: 10px; color: #c0392b; border-top: 1px solid var(--border); font-family: monospace; }
+  .empty { padding: 14px 12px; color: var(--fg2); font-size: 12px; }
 
+  footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .rates { font-size: 11px; color: var(--fg2); margin-right: auto; }
+  .rates.warn { color: var(--warn); }
+
+  .err { padding: 4px 12px; font-size: 10px; color: #c0392b; border-top: 1px solid var(--border); font-family: monospace; }
 
   .sr-only {
     position: absolute; width: 1px; height: 1px;

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { detectAllFromText, detectPriceFromText, normalizeAmount } from './detector';
+import { makeTokenResolver } from './locale';
 
 /** Compact helper: the first price found in `text`, or null. */
 function detect(text: string) {
@@ -95,6 +96,76 @@ describe('finds every price in a run of text', () => {
 
   test('a price never spans a line break', () => {
     expect(detectAllFromText('$\n19.99')).toEqual([]);
+  });
+});
+
+describe('price ranges', () => {
+  const range = (text: string) => {
+    const [price] = detectAllFromText(text);
+    return price ? [price.amount, price.amountMax, price.currencyCode, text.slice(price.matchStart, price.matchEnd)] : null;
+  };
+
+  test('two full matches joined by a dash', () => {
+    expect(range('€10 – €20')).toEqual([10, 20, 'EUR', '€10 – €20']);
+  });
+
+  test('a bare upper bound after a prefixed price', () => {
+    expect(range('€10-20')).toEqual([10, 20, 'EUR', '€10-20']);
+  });
+
+  test('a bare lower bound before a suffixed price', () => {
+    expect(range('10-20 kr')).toEqual([10, 20, 'SEK', '10-20 kr']);
+  });
+
+  test('a percentage is not an upper bound', () => {
+    // "€10-20% off" is one price and a discount, not a range.
+    expect(range('€10-20% off')).toEqual([10, undefined, 'EUR', '€10']);
+  });
+
+  test('a descending pair stays two prices', () => {
+    expect(detectAllFromText('$5–$3').map((p) => p.amount)).toEqual([5, 3]);
+  });
+
+  test('prices separated by words stay separate', () => {
+    expect(detectAllFromText('between $1,000 and $2,000').map((p) => p.amountMax)).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+
+  test('a bare year range is not a price', () => {
+    expect(detectAllFromText('2020–2024 report')).toEqual([]);
+  });
+});
+
+describe('page context resolves ambiguous tokens', () => {
+  test('$ on a .ca domain is Canadian', () => {
+    const [price] = detectAllFromText('$49.99', makeTokenResolver('amazon.ca', 'en')!);
+    expect([price.currencyCode, price.inferred]).toEqual(['CAD', true]);
+  });
+
+  test('kr on a .no domain is Norwegian', () => {
+    const [price] = detectAllFromText('1 099 kr', makeTokenResolver('komplett.no', 'nb')!);
+    expect(price.currencyCode).toBe('NOK');
+  });
+
+  test('¥ on a .cn domain is yuan', () => {
+    const [price] = detectAllFromText('¥ 3980', makeTokenResolver('jd.cn', 'zh')!);
+    expect(price.currencyCode).toBe('CNY');
+  });
+
+  test('an explicit token is never overridden', () => {
+    const [price] = detectAllFromText('US$ 20', makeTokenResolver('amazon.ca', 'en')!);
+    expect([price.currencyCode, price.inferred]).toEqual(['USD', undefined]);
+  });
+
+  test('a lang region resolves when the domain is generic', () => {
+    const [price] = detectAllFromText('$49.99', makeTokenResolver('shop.example.com', 'en-AU')!);
+    expect(price.currencyCode).toBe('AUD');
+  });
+
+  test('no resolver leaves the historical default', () => {
+    expect(detectAllFromText('$49.99')[0].currencyCode).toBe('USD');
   });
 });
 

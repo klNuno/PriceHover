@@ -1,6 +1,6 @@
 {
   "name": "pricehover",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Browser extension that converts prices on hover",
   "license": "MIT",
   "private": true,
@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "icons": "bun run scripts/gen-icons.ts",
     "flags": "bun run scripts/gen-flags.ts",
-    "postinstall": "wxt prepare"
+    "postinstall": "wxt prepare",
+    "locales": "bun run scripts/gen-locales.ts"
   },
   "dependencies": {
     "svelte": "^5.0.0"

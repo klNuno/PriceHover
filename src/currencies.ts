@@ -18,6 +18,7 @@ export const CURRENCIES: Currency[] = [
   { code: 'NOK', symbol: 'kr', flag: '🇳🇴', name: 'Norwegian Krone' },
   { code: 'SEK', symbol: 'kr', flag: '🇸🇪', name: 'Swedish Krona' },
   { code: 'DKK', symbol: 'kr', flag: '🇩🇰', name: 'Danish Krone' },
+  { code: 'ISK', symbol: 'kr', flag: '🇮🇸', name: 'Icelandic Króna' },
   { code: 'PLN', symbol: 'zł', flag: '🇵🇱', name: 'Polish Złoty' },
   { code: 'CZK', symbol: 'Kč', flag: '🇨🇿', name: 'Czech Koruna' },
   { code: 'HUF', symbol: 'Ft', flag: '🇭🇺', name: 'Hungarian Forint' },
@@ -59,6 +60,6 @@ export function flagToCountryCode(flag: string): string {
 // Detection symbols and their positional rules live in detector.ts, next to the
 // regex that consumes them.
 //
-// One ambiguity is worth stating here: 'kr' is shared by NOK, SEK, DKK and ISK.
-// We default to SEK, the one most often seen on international e-commerce.
-// Resolving it properly would need the page locale or TLD, which is out of scope.
+// Several tokens are shared by more than one country: 'kr' by SEK, NOK, DKK and
+// ISK, '$' by a dozen currencies, '¥' by JPY and CNY. Each has a default reading
+// here, and locale.ts overrides it from the page's ccTLD or `<html lang>` region.
