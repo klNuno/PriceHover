@@ -1,21 +1,21 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { convertPrice } from '../../src/convert';
   import { CURRENCIES, CURRENCY_BY_CODE, flagToCountryCode } from '../../src/currencies';
   import { flagImage } from '../../src/flags';
-  import { t } from '../../src/i18n';
+  import { t, uiLocale } from '../../src/i18n';
   import { MESSAGE, send } from '../../src/messages';
   import { parseQuery } from '../../src/query';
   import { parseRates } from '../../src/rates';
   import {
-    DEFAULT_SETTINGS, isSiteDisabled, loadSettings, normalizeHostname, saveSettings,
+    defaultSettings, isSiteDisabled, normalizeHostname, readSettings, updateSettings, watchSettings,
   } from '../../src/settings';
-  import type { Settings } from '../../src/settings';
+  import type { Settings, SettingsPatch } from '../../src/settings';
   import { formatAgo } from '../../src/time';
   import { STALE_AFTER_MS, STORAGE } from '../../src/types';
   import type { ExchangeRates } from '../../src/types';
 
-  let settings = $state<Settings>({ ...DEFAULT_SETTINGS });
+  let settings = $state<Settings>(defaultSettings());
   let rates = $state<ExchangeRates | null>(null);
   let ratesTimestamp = $state(0);
   let query = $state('');
@@ -23,18 +23,50 @@
   let refreshing = $state(false);
   let error = $state('');
   let loaded = $state(false);
+  /** False until a read actually succeeded: writing before that persists defaults over real data. */
+  let canSave = $state(false);
 
   const version = chrome.runtime.getManifest().version;
+  let unwatch: (() => void) | null = null;
 
   onMount(async () => {
+    // The page ships in eight locales, so the document language cannot be a
+    // constant in the HTML.
+    document.documentElement.lang = uiLocale();
+
+    // Subscribed before the first await, for two reasons: a write landing while
+    // we read would fire into no listener, and `onDestroy` on a popup closed
+    // that fast would run before the assignment and leak the listener.
+    // The options page and other popups write the same key. Without this, the
+    // snapshot goes stale and the next write hands back yesterday's list.
+    let live = false;
     try {
-      settings = await loadSettings();
+      unwatch = watchSettings((next) => {
+        live = true;
+        settings = next;
+        canSave = true;
+        if (error === t('loadFailed')) error = '';
+      });
+    } catch (e) {
+      console.error('[PH] cannot watch settings', e);
+    }
+
+    const load = await readSettings();
+    if (!live) settings = load.settings; // a change event already brought something newer
+    canSave = canSave || load.source !== 'failed';
+    if (load.source === 'failed') {
+      console.error('[PH] settings read failed', load.error);
+      if (!canSave) error = t('loadFailed');
+    }
+    loaded = true;
+
+    try {
       const stored = await chrome.storage.local.get([STORAGE.RATES, STORAGE.RATES_TS]);
       rates = parseRates(stored?.[STORAGE.RATES]);
       const ts = stored?.[STORAGE.RATES_TS];
       ratesTimestamp = typeof ts === 'number' ? ts : 0;
     } catch (e) {
-      error = String(e);
+      console.error('[PH] rates read failed', e);
     }
 
     // `activeTab` gives the URL only because the user just clicked the icon,
@@ -48,37 +80,52 @@
         }
       }
     } catch { /* no activeTab grant, or an internal page */ }
-
-    loaded = true;
   });
 
-  async function update(patch: Partial<Settings>): Promise<void> {
-    settings = { ...settings, ...patch };
+  onDestroy(() => unwatch?.());
+
+  /**
+   * The new value lands in `settings` only once storage has taken it, so the UI
+   * can never show a switch the browser did not persist. `restore` puts back a
+   * control the browser flipped on its own (a checkbox is toggled before the
+   * handler runs, and an unchanged `settings` re-renders to nothing).
+   */
+  async function update(patch: SettingsPatch, restore?: () => void): Promise<void> {
+    if (!canSave) { if (loaded) error = t('loadFailed'); restore?.(); return; }
     try {
-      await saveSettings(settings);
+      settings = await updateSettings(patch);
+      error = '';
     } catch (e) {
-      error = String(e);
+      console.error('[PH] settings write failed', e);
+      error = t('saveFailed');
+      restore?.();
     }
   }
 
   const siteDisabled = $derived(hostname ? isSiteDisabled(settings, hostname) : false);
 
+  // Both lists are derived from the list already in storage, never from the
+  // local snapshot: two quick clicks would otherwise both build on the value
+  // read before the first write, and the second would drop the first.
   function toggleSite(): void {
     if (!hostname) return;
-    update({
-      disabledSites: siteDisabled
-        ? settings.disabledSites.filter((s) => s !== hostname)
-        : [...settings.disabledSites, hostname],
-    });
+    void update((current) => ({
+      disabledSites: isSiteDisabled(current, hostname)
+        ? current.disabledSites.filter((s) => s !== hostname)
+        : [...current.disabledSites, hostname],
+    }));
   }
 
-  function toggleTarget(code: string): void {
+  function toggleTarget(code: string, box?: HTMLInputElement): void {
     if (code === settings.baseCurrency) return;
-    update({
-      targetCurrencies: settings.targetCurrencies.includes(code)
-        ? settings.targetCurrencies.filter((c) => c !== code)
-        : [...settings.targetCurrencies, code],
-    });
+    void update(
+      (current) => ({
+        targetCurrencies: current.targetCurrencies.includes(code)
+          ? current.targetCurrencies.filter((c) => c !== code)
+          : [...current.targetCurrencies, code],
+      }),
+      () => { if (box) box.checked = settings.targetCurrencies.includes(code); }
+    );
   }
 
   async function refresh(): Promise<void> {
@@ -155,7 +202,7 @@
 <div class="popup">
   <header>
     <span class="title">PriceHover</span>
-    <span class="version">v{version}</span>
+    <span class="version">{t('version', version)}</span>
     <button class="icon" type="button" title={t('settings')} onclick={() => send(MESSAGE.OPEN_OPTIONS)}>
       {t('settings')}
     </button>
@@ -199,7 +246,7 @@
             class="sr-only"
             checked={role !== null}
             disabled={role === 'base'}
-            onchange={() => toggleTarget(currency.code)}
+            onchange={(e) => toggleTarget(currency.code, e.currentTarget)}
           />
           {#if flagSrc}
             <img class="flag" src={flagSrc} alt="" />
@@ -232,7 +279,7 @@
     </button>
   </footer>
 
-  {#if error}<div class="err">{error}</div>{/if}
+  {#if error}<div class="err" role="alert">{error}</div>{/if}
 </div>
 
 <style>
@@ -250,6 +297,7 @@
     --green: #1a8c2a;
     --warn: #9a6410;
     --focus: #2b6cff;
+    --danger: #c0392b;
   }
   @media (prefers-color-scheme: dark) {
     :global(:root) {
@@ -263,6 +311,8 @@
       --green: #5fcc6f;
       --warn: #e0a23c;
       --focus: #6ea0ff;
+      /* #c0392b on #111 is about 3.5:1, under AA. This is the options page's tone. */
+      --danger: #ef7a6d;
     }
   }
 
@@ -373,7 +423,7 @@
   .rates { font-size: 11px; color: var(--fg2); margin-right: auto; }
   .rates.warn { color: var(--warn); }
 
-  .err { padding: 4px 12px; font-size: 10px; color: #c0392b; border-top: 1px solid var(--border); font-family: monospace; }
+  .err { padding: 4px 12px; font-size: 10px; color: var(--danger); border-top: 1px solid var(--border); }
 
   .sr-only {
     position: absolute; width: 1px; height: 1px;

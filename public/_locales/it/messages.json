@@ -26,9 +26,6 @@
   "convertToHelp": {
     "message": "Mostrate nel tooltip, sotto la tua valuta."
   },
-  "shownCount": {
-    "message": "$1 mostrate"
-  },
   "settings": {
     "message": "Impostazioni"
   },
@@ -49,6 +46,12 @@
   },
   "refreshFailed": {
     "message": "Aggiornamento non riuscito"
+  },
+  "saveFailed": {
+    "message": "Non è stato possibile salvare la modifica."
+  },
+  "loadFailed": {
+    "message": "Impossibile leggere le tue impostazioni, quindi non verrà salvato nulla. Riprova tra poco."
   },
   "timeJustNow": {
     "message": "proprio ora"
@@ -82,9 +85,6 @@
   },
   "turnOn": {
     "message": "Attiva"
-  },
-  "turnOff": {
-    "message": "Disattiva"
   },
   "pauseOnSite": {
     "message": "Sospendi su $1"
@@ -167,8 +167,26 @@
   "remove": {
     "message": "Rimuovi"
   },
+  "moveUp": {
+    "message": "Sposta su"
+  },
+  "moveDown": {
+    "message": "Sposta giù"
+  },
+  "invalidSite": {
+    "message": "Non è un indirizzo di sito. Prova esempio.com."
+  },
   "reset": {
     "message": "Ripristina"
+  },
+  "resetWarning": {
+    "message": "Questo cancella tutte le impostazioni, inclusi i siti sospesi. Non è reversibile."
+  },
+  "resetConfirm": {
+    "message": "Conferma ripristino"
+  },
+  "resetCancel": {
+    "message": "Annulla"
   },
   "version": {
     "message": "Versione $1"

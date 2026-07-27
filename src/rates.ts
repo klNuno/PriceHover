@@ -21,9 +21,16 @@ export function parseRates(value: unknown): ExchangeRates | null {
   return rates.USD ? rates : null;
 }
 
-/** Throws on a network or HTTP failure; returns null on an unusable payload. */
+/**
+ * How long to wait before giving up. A connection that hangs used to keep an
+ * MV3 service worker alive until Chrome's five-minute cap killed it with the
+ * rates unwritten and the caller still awaiting.
+ */
+const FETCH_TIMEOUT_MS = 10_000;
+
+/** Throws on a network, timeout or HTTP failure; returns null on a bad payload. */
 export async function fetchRates(): Promise<ExchangeRates | null> {
-  const res = await fetch(RATES_URL);
+  const res = await fetch(RATES_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
   const data: unknown = await res.json();

@@ -49,9 +49,31 @@ function smartDecimals(amount: number): number {
 }
 
 function decimalsFor(amount: number, code: string, rounding: Rounding): number | null {
+  // A price that is worth something must never print as zero. One VND is four
+  // hundredths of a cent, and every rounding mode said "$0.00", which is not an
+  // approximation of the answer but the opposite of it.
+  const sunk = sunkDecimals(amount, code);
+  if (sunk !== null) return sunk;
+
   if (rounding === 'integer') return 0;
   if (rounding === 'smart') return Math.min(naturalDecimals(code), smartDecimals(amount));
   return null;
+}
+
+/**
+ * How many places it takes to show a non-zero amount that the currency's own
+ * minor unit rounds away, or null when the minor unit already shows it.
+ */
+function sunkDecimals(amount: number, code: string): number | null {
+  const magnitude = Math.abs(amount);
+  if (magnitude === 0) return null;
+
+  const natural = naturalDecimals(code);
+  if (Math.round(magnitude * 10 ** natural) !== 0) return null;
+
+  // One place past the first significant digit, and Intl caps fraction digits
+  // at 20 whatever we ask for.
+  return Math.min(20, Math.ceil(-Math.log10(magnitude)) + 1);
 }
 
 /** True when displaying `amount` at `decimals` places changes its value. */

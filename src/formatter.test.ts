@@ -20,6 +20,28 @@ describe('exact rounding follows the currency, not a hardcoded 2', () => {
   });
 });
 
+describe('an amount worth something never prints as zero', () => {
+  // One VND converts to four hundredths of a cent, and every mode used to say
+  // "$0.00", which reads as free rather than as very little.
+  const cases: [number, string, string][] = [
+    [0.00004, 'USD', '$0.00004'],
+    [0.00004, 'EUR', '€0.00004'],
+    [0.004, 'USD', '$0.004'],
+  ];
+
+  for (const [amount, code, expected] of cases) {
+    test(`${amount} ${code}`, () => {
+      expect(plain(formatCurrencyAmount(amount, code, 'exact'))).toBe(expected);
+      expect(plain(formatCurrencyAmount(amount, code, 'smart'))).toBe(expected);
+      expect(plain(formatCurrencyAmount(amount, code, 'integer'))).toBe(expected);
+    });
+  }
+
+  test('zero itself is untouched', () => {
+    expect(formatCurrencyAmount(0, 'USD', 'exact')).toBe('$0.00');
+  });
+});
+
 describe('smart rounding', () => {
   test('drops decimals as the amount grows', () => {
     expect(formatCurrencyAmount(1234.567, 'EUR', 'smart')).toBe('≈€1,235');
