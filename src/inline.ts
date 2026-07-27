@@ -10,20 +10,36 @@ import type { ExchangeRates } from './types';
  * strict: never replace the site's own text, only append beside it; never touch
  * anything editable or machine-read; and stop after a fixed budget rather than
  * grinding through a 50 000-node page.
+ *
+ * "Append, never rewrite" covers the node itself, not only its characters: a
+ * framework hands out references to the Text nodes it rendered, so splitting or
+ * merging one is as destructive as overwriting its text. Nothing here calls
+ * `splitText` or `normalize`.
  */
 
 export const INLINE_ATTR = 'data-pricehover';
 
+/** Anything outside this namespace is SVG or MathML, where an HTML span renders nothing. */
+const XHTML_NS = 'http://www.w3.org/1999/xhtml';
+
 /** Containers whose text is code, input, or markup rather than prose. */
 const SKIPPED_TAGS = new Set([
   'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'SELECT', 'OPTION',
-  'CODE', 'PRE', 'KBD', 'SAMP', 'SVG', 'MATH', 'HEAD', 'TITLE',
+  'CODE', 'PRE', 'KBD', 'SAMP', 'HEAD', 'TITLE',
 ]);
 
 /** A page with more prices than this is a data table; annotating it helps nobody. */
 const MAX_ANNOTATIONS = 600;
 /** Text nodes examined per idle slice. */
 const CHUNK = 250;
+/**
+ * Pending work is dropped past this point. An SPA can mutate faster than idle
+ * slices drain, and an unbounded queue would hold every detached Text node it
+ * ever produced alive.
+ */
+const MAX_QUEUE = 20000;
+/** Consumed slots are dropped once this many pile up behind the cursor. */
+const COMPACT_AT = 512;
 
 export interface InlineDeps {
   settings: () => Settings;
@@ -51,6 +67,9 @@ const cancelIdle: (handle: IdleHandle) => void =
 
 function isSkipped(node: Text): boolean {
   for (let el = node.parentElement; el; el = el.parentElement) {
+    // tagName is uppercase only in the HTML namespace, so an <svg> reports
+    // "svg" and would walk straight past the tag list.
+    if (el.namespaceURI !== XHTML_NS) return true;
     if (SKIPPED_TAGS.has(el.tagName)) return true;
     if (el.hasAttribute(INLINE_ATTR)) return true;
     if (el.isContentEditable) return true;
@@ -69,25 +88,26 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
    */
   let seen = new WeakMap<Text, string>();
   let nodeBadges = new WeakMap<Text, HTMLElement[]>();
-  let queue: Text[] = [];
+  /**
+   * Text nodes to examine, mixed with roots still to be expanded. A root is
+   * queued whole and walked later, inside an idle slice, so a single mutation
+   * carrying half a page does not cost a synchronous full-document walk in the
+   * observer's microtask.
+   */
+  let queue: Node[] = [];
+  let cursor = 0;
+  let walking: TreeWalker | null = null;
   let idleHandle: IdleHandle | null = null;
-  let writing = false;
   let destroyed = false;
 
   /**
-   * Mutation records are delivered as a microtask, long after `writing` has
-   * gone back to false, so the flag alone does not keep our own edits out.
-   * `splitText` in particular queues a characterData record on the node we just
-   * annotated, which came straight back in and annotated it a second time.
-   * Taking and discarding the records while still holding the flag is what
-   * actually closes the loop.
+   * Our own writes have to stay out of the queue, but the buffer they land in
+   * also holds the page's pending mutations, so draining it with
+   * `takeRecords()` threw away page changes that were never annotated
+   * afterwards. Every element we insert carries INLINE_ATTR, so filtering the
+   * records is enough, and removals are ignored here in any case.
    */
-  function discardOwnRecords(): void {
-    observer.takeRecords();
-  }
-
   const observer = new MutationObserver((records) => {
-    if (writing) return;
     for (const record of records) {
       for (const node of record.addedNodes) {
         if (node.nodeType === Node.ELEMENT_NODE && (node as Element).hasAttribute?.(INLINE_ATTR)) continue;
@@ -101,20 +121,55 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
   });
 
   function enqueue(root: Node): void {
-    if (destroyed) return;
-    if (root.nodeType === Node.TEXT_NODE) {
-      queue.push(root as Text);
-      return;
-    }
-    if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return;
+    if (destroyed || !root.isConnected) return;
+    if (root.nodeType !== Node.TEXT_NODE && root.nodeType !== Node.ELEMENT_NODE) return;
+    if (queue.length - cursor >= MAX_QUEUE) return;
+    queue.push(root);
+  }
 
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    let node: Node | null;
-    while ((node = walker.nextNode())) queue.push(node as Text);
+  function resetQueue(): void {
+    queue = [];
+    cursor = 0;
+    walking = null;
+  }
+
+  /**
+   * Next text node to examine, expanding one queued root at a time. Reading
+   * through a cursor rather than `shift()` keeps a full-document refresh linear
+   * instead of quadratic; the tail is compacted away once enough of it is dead.
+   */
+  function nextText(): Text | null {
+    for (;;) {
+      if (walking) {
+        const next = walking.nextNode();
+        if (next) return next as Text;
+        walking = null;
+      }
+      if (cursor >= queue.length) { resetQueue(); return null; }
+
+      const item = queue[cursor++]!;
+      if (cursor >= COMPACT_AT) { queue = queue.slice(cursor); cursor = 0; }
+      if (item.nodeType === Node.TEXT_NODE) return item as Text;
+      if (!item.isConnected) continue;
+      walking = document.createTreeWalker(item, NodeFilter.SHOW_TEXT);
+    }
+  }
+
+  /**
+   * A badge whose subtree the page dropped never reaches removeBadgesFor, so
+   * the budget would fill with badges nobody can see and annotation would stop
+   * for good with an empty screen. Pruning only once the budget looks full
+   * keeps the scan off the hot path.
+   */
+  function withinBudget(): boolean {
+    if (inserted.size < MAX_ANNOTATIONS) return true;
+    for (const badge of inserted) if (!badge.isConnected) inserted.delete(badge);
+    return inserted.size < MAX_ANNOTATIONS;
   }
 
   function schedule(): void {
-    if (destroyed || idleHandle !== null || !queue.length) return;
+    if (destroyed || idleHandle !== null) return;
+    if (!walking && cursor >= queue.length) return;
     idleHandle = requestIdle(() => {
       idleHandle = null;
       drain();
@@ -125,62 +180,61 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
   function drain(): void {
     const settings = deps.settings();
     const rates = deps.rates();
-    if (!rates) { queue = []; return; }
+    if (!rates) { resetQueue(); return; }
 
     const resolve = deps.resolver();
     const base = settings.baseCurrency;
     let processed = 0;
 
-    writing = true;
-    try {
-      while (queue.length && processed < CHUNK && inserted.size < MAX_ANNOTATIONS) {
-        const node = queue.shift()!;
-        processed++;
-        if (!node.isConnected || isSkipped(node)) continue;
-        if (seen.get(node) === node.data) continue;
-        if (seen.has(node)) removeBadgesFor(node);
+    while (processed < CHUNK && withinBudget()) {
+      const node = nextText();
+      if (!node) break;
+      processed++;
+      if (!node.isConnected || isSkipped(node)) continue;
+      if (seen.get(node) === node.data) continue;
+      if (seen.has(node)) removeBadgesFor(node);
 
-        const text = node.data;
-        seen.set(node, text);
-        if (text.length > 400 || !/\d/.test(text)) continue;
+      const text = node.data;
+      seen.set(node, text);
+      if (text.length > 400 || !/\d/.test(text)) continue;
 
-        const prices = detectAllFromText(text, resolve).filter((p) => p.currencyCode !== base);
-        if (!prices.length) continue;
+      // Only a price with nothing but blanks behind it can be annotated. Any
+      // other one would need the node split in two, and a framework holding the
+      // original Text node then writes into the head while the orphaned tail
+      // stays on screen, which shows the user its text twice. A missing badge
+      // is a smaller loss than a broken page.
+      const price = detectAllFromText(text, resolve).find(
+        (p) => p.currencyCode !== base && p.matchEnd !== undefined && !text.slice(p.matchEnd).trim(),
+      );
+      if (!price) continue;
 
-        // Right to left: every insertion shifts the offsets after it.
-        for (const price of [...prices].reverse()) {
-          if (inserted.size >= MAX_ANNOTATIONS) break;
-          const [converted] = convertPrice(price, rates, [base], settings.rounding);
-          if (!converted) continue;
-          annotate(node, price.matchEnd ?? text.length, converted.formattedMax
-            ? `${converted.formatted} – ${converted.formattedMax}`
-            : converted.formatted);
-        }
-        // splitText left the node holding only the head of its old text.
-        seen.set(node, node.data);
-      }
-    } finally {
-      discardOwnRecords();
-      writing = false;
+      const [converted] = convertPrice(price, rates, [base], settings.rounding);
+      if (!converted) continue;
+      annotate(node, converted.formattedMax
+        ? `${converted.formatted} – ${converted.formattedMax}`
+        : converted.formatted);
     }
 
-    if (inserted.size >= MAX_ANNOTATIONS) queue = [];
+    if (!withinBudget()) resetQueue();
   }
 
-  function annotate(node: Text, offset: number, label: string): void {
+  function annotate(node: Text, label: string): void {
     const parent = node.parentNode;
-    if (!parent || offset > node.data.length) return;
+    if (!parent) return;
 
-    const tail = offset < node.data.length ? node.splitText(offset) : node.nextSibling;
     const badge = document.createElement('span');
     badge.setAttribute(INLINE_ATTR, '1');
+    // The badge is decoration over the page's own text: it has no business in a
+    // copied selection, in find-in-page, or in what a screen reader announces.
+    badge.setAttribute('aria-hidden', 'true');
     // Inline styles rather than a stylesheet: this element lives in the page,
     // and a page stylesheet would be free to restyle a class of ours.
     badge.style.cssText =
       'all:unset;font:inherit;font-size:0.85em;opacity:0.75;' +
-      'white-space:nowrap;unicode-bidi:isolate;margin-inline-start:0.35em;';
+      'white-space:nowrap;unicode-bidi:isolate;margin-inline-start:0.35em;' +
+      'user-select:none;-webkit-user-select:none;';
     badge.textContent = `(${label})`;
-    parent.insertBefore(badge, tail);
+    parent.insertBefore(badge, node.nextSibling);
     inserted.add(badge);
 
     const owned = nodeBadges.get(node);
@@ -188,34 +242,23 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
     else nodeBadges.set(node, [badge]);
   }
 
-  /** Drops the badges a node produced, and rejoins the text splitText divided. */
+  /** Drops the badges a node produced. The node's own text was never touched. */
   function removeBadgesFor(node: Text): void {
     const owned = nodeBadges.get(node);
     if (!owned) return;
 
-    const parent = node.parentNode;
     for (const badge of owned) {
       inserted.delete(badge);
       badge.remove();
     }
     nodeBadges.delete(node);
-    if (parent && parent.nodeType === Node.ELEMENT_NODE) (parent as Element).normalize();
   }
 
   function clear(): void {
-    writing = true;
-    for (const badge of inserted) {
-      const parent = badge.parentNode;
-      badge.remove();
-      // splitText left two adjacent text nodes behind; put them back together
-      // so a second pass sees the same DOM the first one did.
-      if (parent && parent.nodeType === Node.ELEMENT_NODE) (parent as Element).normalize();
-    }
+    for (const badge of inserted) badge.remove();
     inserted.clear();
     seen = new WeakMap();
     nodeBadges = new WeakMap();
-    discardOwnRecords();
-    writing = false;
   }
 
   observer.observe(document.documentElement, {
@@ -231,7 +274,7 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
     },
     refresh(): void {
       clear();
-      queue = [];
+      resetQueue();
       enqueue(document.body);
       schedule();
     },
@@ -239,7 +282,7 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
       destroyed = true;
       observer.disconnect();
       if (idleHandle !== null) { cancelIdle(idleHandle); idleHandle = null; }
-      queue = [];
+      resetQueue();
       clear();
     },
   };

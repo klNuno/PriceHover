@@ -26,9 +26,6 @@
   "convertToHelp": {
     "message": "Erscheinen im Tooltip unter Ihrer Währung."
   },
-  "shownCount": {
-    "message": "$1 angezeigt"
-  },
   "settings": {
     "message": "Einstellungen"
   },
@@ -49,6 +46,12 @@
   },
   "refreshFailed": {
     "message": "Aktualisierung fehlgeschlagen"
+  },
+  "saveFailed": {
+    "message": "Ihre Änderung konnte nicht gespeichert werden."
+  },
+  "loadFailed": {
+    "message": "Ihre Einstellungen konnten nicht gelesen werden, es wird nichts gespeichert. Versuchen Sie es gleich erneut."
   },
   "timeJustNow": {
     "message": "gerade eben"
@@ -82,9 +85,6 @@
   },
   "turnOn": {
     "message": "Einschalten"
-  },
-  "turnOff": {
-    "message": "Ausschalten"
   },
   "pauseOnSite": {
     "message": "Auf $1 pausieren"
@@ -167,8 +167,26 @@
   "remove": {
     "message": "Entfernen"
   },
+  "moveUp": {
+    "message": "Nach oben verschieben"
+  },
+  "moveDown": {
+    "message": "Nach unten verschieben"
+  },
+  "invalidSite": {
+    "message": "Das ist keine Website-Adresse. Versuchen Sie beispiel.de."
+  },
   "reset": {
     "message": "Zurücksetzen"
+  },
+  "resetWarning": {
+    "message": "Das löscht alle Einstellungen, auch Ihre pausierten Websites. Es lässt sich nicht rückgängig machen."
+  },
+  "resetConfirm": {
+    "message": "Zurücksetzen bestätigen"
+  },
+  "resetCancel": {
+    "message": "Abbrechen"
   },
   "version": {
     "message": "Version $1"

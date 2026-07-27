@@ -36,6 +36,21 @@ describe('detects real prices', () => {
     ['₹12,34,567.89', 1234567.89, 'INR'],
     // KWD has three decimals, so a trailing group of three is not thousands.
     ['KD 12.500', 12.5, 'KWD'],
+    // The comma is still a thousands separator there: Kuwait writes 1,250.500.
+    ['KD 1,250', 1250, 'KWD'],
+    ['KWD 1,250.500', 1250.5, 'KWD'],
+    // A qualifier one space from its sign used to fall back to a bare $.
+    ['CA $30', 30, 'CAD'],
+    ['C$30', 30, 'CAD'],
+    ['AU$ 19.99', 19.99, 'AUD'],
+    // U+2007 figure space groups an amount as surely as U+00A0 does.
+    ['1 234,56 €', 1234.56, 'EUR'],
+    // A single fraction digit only ever meant a version behind an ISO code.
+    ['USD 12.5', 12.5, 'USD'],
+    ['12.5 USD', 12.5, 'USD'],
+    // Sub-unit prices: the trailing group of three is decimals, not thousands.
+    ['$0.001', 0.001, 'USD'],
+    ['€0,001', 0.001, 'EUR'],
   ];
 
   for (const [text, amount, code] of cases) {
@@ -60,6 +75,15 @@ describe('rejects prose that looks like a price', () => {
     'EURO 20',               // trailing letter breaks the token
     '€1234.5678',            // rather nothing than a truncated €1234.56
     '$0',                    // zero is not a price
+    'Requires PHP 8',        // a version, not eight pesos
+    'upgrade to PHP 5',
+    'TRY 100 TIMES',         // an all-caps heading defeats case sensitivity alone
+    'CRC32 checksum',        // an ISO code glued to digits is never a price
+    'COP21 in Paris',
+    'R2-D2 is a droid',      // one digit behind a one-character token
+    'Model S/ 3',
+    '-$5.00 discount',       // a negative line converts to the opposite claim
+    '$99999999999999999999', // an id, not twenty digits of money
   ];
 
   for (const text of cases) {
@@ -122,6 +146,16 @@ describe('price ranges', () => {
     expect(range('€10-20% off')).toEqual([10, undefined, 'EUR', '€10']);
   });
 
+  test('a space before the percent sign does not make it one either', () => {
+    expect(range('€10-20 % off')).toEqual([10, undefined, 'EUR', '€10']);
+  });
+
+  test('a merged range does not leave its upper bound behind as a price', () => {
+    // "€10-20 USD" used to yield the range and then 20 USD, two hitboxes over
+    // the same digits.
+    expect(detectAllFromText('€10-20 USD').length).toBe(1);
+  });
+
   test('a descending pair stays two prices', () => {
     expect(detectAllFromText('$5–$3').map((p) => p.amount)).toEqual([5, 3]);
   });
@@ -181,9 +215,15 @@ describe('normalizeAmount', () => {
     ['1.234.567', 'EUR', 1234567],
     ['1,234,567', 'USD', 1234567],
     ['746000', 'IDR', 746000],
-    // Three-decimal currencies read a trailing group of three as decimals.
+    // Three-decimal currencies read a trailing group of three as decimals,
+    // after a dot only: the comma stays a thousands separator there.
     ['1.234', 'KWD', 1.234],
     ['1.234', 'USD', 1234],
+    ['1,250', 'KWD', 1250],
+    ['1,250.500', 'KWD', 1250.5],
+    // A lone zero cannot be a thousands group.
+    ['0.001', 'USD', 0.001],
+    ['0,001', 'EUR', 0.001],
   ];
 
   for (const [raw, code, expected] of cases) {

@@ -26,9 +26,6 @@
   "convertToHelp": {
     "message": "Se muestran en el tooltip, debajo de tu moneda."
   },
-  "shownCount": {
-    "message": "$1 mostradas"
-  },
   "settings": {
     "message": "Ajustes"
   },
@@ -49,6 +46,12 @@
   },
   "refreshFailed": {
     "message": "Error al actualizar"
+  },
+  "saveFailed": {
+    "message": "No se pudo guardar tu cambio."
+  },
+  "loadFailed": {
+    "message": "No se pudieron leer tus ajustes, así que no se guardará nada. Inténtalo de nuevo en un momento."
   },
   "timeJustNow": {
     "message": "ahora mismo"
@@ -82,9 +85,6 @@
   },
   "turnOn": {
     "message": "Activar"
-  },
-  "turnOff": {
-    "message": "Desactivar"
   },
   "pauseOnSite": {
     "message": "Pausar en $1"
@@ -167,8 +167,26 @@
   "remove": {
     "message": "Quitar"
   },
+  "moveUp": {
+    "message": "Mover arriba"
+  },
+  "moveDown": {
+    "message": "Mover abajo"
+  },
+  "invalidSite": {
+    "message": "Eso no es una dirección de sitio. Prueba ejemplo.com."
+  },
   "reset": {
     "message": "Restablecer"
+  },
+  "resetWarning": {
+    "message": "Esto borra todos los ajustes, incluidos tus sitios pausados. No se puede deshacer."
+  },
+  "resetConfirm": {
+    "message": "Confirmar restablecimiento"
+  },
+  "resetCancel": {
+    "message": "Cancelar"
   },
   "version": {
     "message": "Versión $1"

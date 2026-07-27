@@ -4,21 +4,32 @@ import { fetchRates } from '../src/rates';
 import { loadSettings, parseSettings } from '../src/settings';
 import { CACHE_DURATION_MS, STORAGE } from '../src/types';
 
-async function refreshRates(): Promise<RefreshResult> {
-  try {
-    const rates = await fetchRates();
-    if (!rates) throw new Error('Invalid response: missing or unusable rates');
+/**
+ * One request at a time. The popup, the options page and every content script
+ * on every open tab all ask through here, and a page of prices used to turn
+ * into one request per hover the moment the rates were stale.
+ */
+let inFlight: Promise<RefreshResult> | null = null;
 
-    const timestamp = Date.now();
-    await chrome.storage.local.set({
-      [STORAGE.RATES]: rates,
-      [STORAGE.RATES_TS]: timestamp,
-    });
-    return { ok: true, timestamp };
-  } catch (err) {
-    console.error('[PriceHover] Failed to refresh rates:', err);
-    return { ok: false };
-  }
+function refreshRates(): Promise<RefreshResult> {
+  inFlight ??= (async (): Promise<RefreshResult> => {
+    try {
+      const rates = await fetchRates();
+      if (!rates) throw new Error('Invalid response: missing or unusable rates');
+
+      const timestamp = Date.now();
+      await chrome.storage.local.set({
+        [STORAGE.RATES]: rates,
+        [STORAGE.RATES_TS]: timestamp,
+      });
+      return { ok: true, timestamp };
+    } catch (err) {
+      console.error('[PriceHover] Failed to refresh rates:', err);
+      return { ok: false };
+    }
+  })().finally(() => { inFlight = null; });
+
+  return inFlight;
 }
 
 async function refreshIfStale(): Promise<void> {
@@ -26,7 +37,10 @@ async function refreshIfStale(): Promise<void> {
   const ts = (stored as Record<string, unknown>)[STORAGE.RATES_TS];
   const lastRefresh = typeof ts === 'number' ? ts : 0;
 
-  if (Date.now() - lastRefresh > CACHE_DURATION_MS) await refreshRates();
+  // Absolute: a clock set back leaves a timestamp in the future, and signed
+  // arithmetic read that as infinitely fresh, so the rates never refreshed
+  // again for as long as the skew lasted.
+  if (Math.abs(Date.now() - lastRefresh) > CACHE_DURATION_MS) await refreshRates();
 }
 
 async function setBadge(enabled: boolean): Promise<void> {
@@ -40,9 +54,9 @@ async function setBadge(enabled: boolean): Promise<void> {
 
 /**
  * The only sign of the master switch when the popup is closed. Per-site pausing
- * is deliberately absent from the badge: reading the active tab's URL would
- * cost a `tabs` permission, and this extension asks for `storage` and nothing
- * else.
+ * is deliberately absent from the badge: naming the active tab outside a click
+ * on the icon would cost a `tabs` permission, and `activeTab` grants nothing at
+ * rest, which is the whole reason it shows no install warning.
  */
 async function syncBadge(): Promise<void> {
   const settings = await loadSettings().catch(() => null);
@@ -101,8 +115,9 @@ export default defineBackground(() => {
 
   // Only fires where the background page is persistent (Firefox, wrappers like
   // Extendium). An MV3 service worker is torn down long before 24 h elapse, so
-  // Chrome relies on the hooks above plus the content script, which refreshes
-  // stale rates itself. chrome.alarms would survive the teardown but costs an
-  // extra permission we deliberately do not ask for.
+  // Chrome relies on the hooks above plus the content script, which asks for a
+  // refresh through `REFRESH_RATES` as soon as it finds the cache stale.
+  // chrome.alarms would survive the teardown but costs an extra permission we
+  // deliberately do not ask for.
   setInterval(() => { refreshRates().catch(() => {}); }, CACHE_DURATION_MS);
 });

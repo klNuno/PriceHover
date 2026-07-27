@@ -26,9 +26,6 @@
   "convertToHelp": {
     "message": "Exibidas na dica, abaixo da sua moeda."
   },
-  "shownCount": {
-    "message": "$1 exibidas"
-  },
   "settings": {
     "message": "Configurações"
   },
@@ -49,6 +46,12 @@
   },
   "refreshFailed": {
     "message": "Falha ao atualizar"
+  },
+  "saveFailed": {
+    "message": "Não foi possível salvar sua alteração."
+  },
+  "loadFailed": {
+    "message": "Não foi possível ler suas configurações, então nada será salvo. Tente de novo em instantes."
   },
   "timeJustNow": {
     "message": "agora mesmo"
@@ -82,9 +85,6 @@
   },
   "turnOn": {
     "message": "Ativar"
-  },
-  "turnOff": {
-    "message": "Desativar"
   },
   "pauseOnSite": {
     "message": "Pausar em $1"
@@ -167,8 +167,26 @@
   "remove": {
     "message": "Remover"
   },
+  "moveUp": {
+    "message": "Mover para cima"
+  },
+  "moveDown": {
+    "message": "Mover para baixo"
+  },
+  "invalidSite": {
+    "message": "Isso não é um endereço de site. Tente exemplo.com."
+  },
   "reset": {
     "message": "Restaurar padrões"
+  },
+  "resetWarning": {
+    "message": "Isso apaga todas as configurações, inclusive seus sites pausados. Não dá para desfazer."
+  },
+  "resetConfirm": {
+    "message": "Confirmar restauração"
+  },
+  "resetCancel": {
+    "message": "Cancelar"
   },
   "version": {
     "message": "Versão $1"

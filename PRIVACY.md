@@ -52,6 +52,9 @@ One, to `https://open.er-api.com/v6/latest/USD`:
 - whenever you press **Refresh** in the popup or the options page.
 
 It is a plain `GET` with no parameters, no headers identifying you, and no body.
+It is made by the extension's background worker, never from the page you are
+reading: a request issued from a page carries that page's address, and this one
+must not know it.
 See [exchangerate-api.com's privacy policy](https://www.exchangerate-api.com/privacy)
 for what they log at their end.
 

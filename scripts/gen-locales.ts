@@ -75,10 +75,6 @@ const MESSAGES: Record<string, Entry> = {
     ja: 'ツールチップ内、自国通貨の下に表示されます。',
     zh_CN: '显示在提示框中，位于你的货币下方。',
   },
-  shownCount: {
-    en: '$1 shown', fr: '$1 affichées', es: '$1 mostradas', de: '$1 angezeigt',
-    pt_BR: '$1 exibidas', it: '$1 mostrate', ja: '$1 件表示', zh_CN: '显示 $1 种',
-  },
   settings: {
     en: 'Settings', fr: 'Réglages', es: 'Ajustes', de: 'Einstellungen',
     pt_BR: 'Configurações', it: 'Impostazioni', ja: '設定', zh_CN: '设置',
@@ -113,6 +109,28 @@ const MESSAGES: Record<string, Entry> = {
     en: 'Refresh failed', fr: 'Échec de l’actualisation', es: 'Error al actualizar',
     de: 'Aktualisierung fehlgeschlagen', pt_BR: 'Falha ao atualizar',
     it: 'Aggiornamento non riuscito', ja: '更新に失敗しました', zh_CN: '刷新失败',
+  },
+
+  // ── Storage failures ─────────────────────────────────────────────────────
+  saveFailed: {
+    en: 'Your change could not be saved.',
+    fr: 'Votre modification n’a pas pu être enregistrée.',
+    es: 'No se pudo guardar tu cambio.',
+    de: 'Ihre Änderung konnte nicht gespeichert werden.',
+    pt_BR: 'Não foi possível salvar sua alteração.',
+    it: 'Non è stato possibile salvare la modifica.',
+    ja: '変更を保存できませんでした。',
+    zh_CN: '无法保存你的更改。',
+  },
+  loadFailed: {
+    en: 'Your settings could not be read, so nothing will be saved. Try again in a moment.',
+    fr: 'Impossible de lire vos réglages, rien ne sera enregistré. Réessayez dans un instant.',
+    es: 'No se pudieron leer tus ajustes, así que no se guardará nada. Inténtalo de nuevo en un momento.',
+    de: 'Ihre Einstellungen konnten nicht gelesen werden, es wird nichts gespeichert. Versuchen Sie es gleich erneut.',
+    pt_BR: 'Não foi possível ler suas configurações, então nada será salvo. Tente de novo em instantes.',
+    it: 'Impossibile leggere le tue impostazioni, quindi non verrà salvato nulla. Riprova tra poco.',
+    ja: '設定を読み込めなかったため、変更は保存されません。しばらくしてからもう一度お試しください。',
+    zh_CN: '无法读取你的设置，因此不会保存任何更改。请稍后再试。',
   },
   timeJustNow: {
     en: 'just now', fr: 'à l’instant', es: 'ahora mismo', de: 'gerade eben',
@@ -171,10 +189,6 @@ const MESSAGES: Record<string, Entry> = {
   turnOn: {
     en: 'Turn on', fr: 'Activer', es: 'Activar', de: 'Einschalten',
     pt_BR: 'Ativar', it: 'Attiva', ja: 'オンにする', zh_CN: '开启',
-  },
-  turnOff: {
-    en: 'Turn off', fr: 'Désactiver', es: 'Desactivar', de: 'Ausschalten',
-    pt_BR: 'Desativar', it: 'Disattiva', ja: 'オフにする', zh_CN: '关闭',
   },
   pauseOnSite: {
     en: 'Pause on $1', fr: 'Suspendre sur $1', es: 'Pausar en $1',
@@ -333,10 +347,49 @@ const MESSAGES: Record<string, Entry> = {
     en: 'Remove', fr: 'Retirer', es: 'Quitar', de: 'Entfernen',
     pt_BR: 'Remover', it: 'Rimuovi', ja: '削除', zh_CN: '移除',
   },
+  moveUp: {
+    en: 'Move up', fr: 'Déplacer vers le haut', es: 'Mover arriba',
+    de: 'Nach oben verschieben', pt_BR: 'Mover para cima', it: 'Sposta su',
+    ja: '上へ移動', zh_CN: '上移',
+  },
+  moveDown: {
+    en: 'Move down', fr: 'Déplacer vers le bas', es: 'Mover abajo',
+    de: 'Nach unten verschieben', pt_BR: 'Mover para baixo', it: 'Sposta giù',
+    ja: '下へ移動', zh_CN: '下移',
+  },
+  invalidSite: {
+    en: 'That is not a site address. Try example.com.',
+    fr: 'Ce n’est pas une adresse de site. Essayez exemple.com.',
+    es: 'Eso no es una dirección de sitio. Prueba ejemplo.com.',
+    de: 'Das ist keine Website-Adresse. Versuchen Sie beispiel.de.',
+    pt_BR: 'Isso não é um endereço de site. Tente exemplo.com.',
+    it: 'Non è un indirizzo di sito. Prova esempio.com.',
+    ja: 'サイトのアドレスではありません。example.com のように入力してください。',
+    zh_CN: '这不是网站地址。请尝试 example.com。',
+  },
   reset: {
     en: 'Reset to defaults', fr: 'Réinitialiser', es: 'Restablecer',
     de: 'Zurücksetzen', pt_BR: 'Restaurar padrões', it: 'Ripristina',
     ja: '初期設定に戻す', zh_CN: '恢复默认',
+  },
+  resetWarning: {
+    en: 'This clears every setting, including your paused sites. It cannot be undone.',
+    fr: 'Cela efface tous les réglages, y compris vos sites suspendus. C’est irréversible.',
+    es: 'Esto borra todos los ajustes, incluidos tus sitios pausados. No se puede deshacer.',
+    de: 'Das löscht alle Einstellungen, auch Ihre pausierten Websites. Es lässt sich nicht rückgängig machen.',
+    pt_BR: 'Isso apaga todas as configurações, inclusive seus sites pausados. Não dá para desfazer.',
+    it: 'Questo cancella tutte le impostazioni, inclusi i siti sospesi. Non è reversibile.',
+    ja: '一時停止中のサイトを含め、すべての設定が消えます。元に戻せません。',
+    zh_CN: '这会清除所有设置，包括已暂停的网站，且无法撤销。',
+  },
+  resetConfirm: {
+    en: 'Confirm reset', fr: 'Confirmer la réinitialisation', es: 'Confirmar restablecimiento',
+    de: 'Zurücksetzen bestätigen', pt_BR: 'Confirmar restauração', it: 'Conferma ripristino',
+    ja: 'リセットを確認', zh_CN: '确认恢复默认',
+  },
+  resetCancel: {
+    en: 'Cancel', fr: 'Annuler', es: 'Cancelar', de: 'Abbrechen',
+    pt_BR: 'Cancelar', it: 'Annulla', ja: 'キャンセル', zh_CN: '取消',
   },
   version: {
     en: 'Version $1', fr: 'Version $1', es: 'Versión $1', de: 'Version $1',

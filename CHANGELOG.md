@@ -15,6 +15,15 @@ currency list becomes your base currency plus targets, in the order it was in.
 - Price ranges are understood: `€10 – €20`, `€10-20` and `10-20 kr` convert as one range instead of one price, or none. `€10-20% off` is still a single price.
 - Every currency now rounds to its own minor unit. `KWD 12.500` was truncated to two decimals because the formatter hardcoded a cap for everything but JPY and KRW.
 - Added ISK, so `kr` can resolve to all four krona currencies.
+- Three-decimal currencies read a comma as thousands again. Kuwait writes `1,250.500` exactly as the US writes `1,250.50`, so the rule that keeps `KD 12.500` at twelve and a half was applying to the wrong separator: `KD 1,250` showed as 1.25 dinars, and `KWD 1,250.500` as 1 250 500.
+- A trailing group of three after a lone zero is decimals, not thousands. `$0.001` converted as one dollar.
+- `CA $30` is Canadian. A qualifier one space from its sign fell through to the bare `$` and read as thirty US dollars. `C$` and `AU$` are understood too.
+- `USD 12.5` and `12.5 USD` convert. A single fraction digit was rejected behind every alphabetic token, which was aimed at `PHP 8.2` and caught every ISO code with it. The popup calculator refused `12.5 usd` for the same reason.
+- Prose stopped being read as prices in four more shapes: `Requires PHP 8`, an all-caps `TRY 100 TIMES`, `CRC32`, `COP21`, `R2-D2`, and a twenty-digit order number after a `$`.
+- A discount line is not a price. `-$5.00` converted to a positive five dollars, which says the opposite of what the page says.
+- A figure space (U+2007) groups an amount like any other space. `1 234,56 €` read as 234.56.
+- `€10-20 % off` is a price and a discount, like `€10-20% off` already was. A merged range no longer leaves its upper bound behind as a second price with an overlapping hitbox.
+- An amount too small for its currency's minor unit prints its real value instead of zero. One VND is four hundredths of a US cent, and every rounding mode said `$0.00`.
 
 ### Interface
 
@@ -42,6 +51,12 @@ currency list becomes your base currency plus targets, in the order it was in.
 - Semantic markup is checked with one selector match instead of walking six ancestors and reading four attributes from each.
 - Exchange rates are read from storage on first need rather than on every page load.
 - The tooltip measures itself once per layout, not on every reposition.
+
+### Privacy
+
+- The rate request is made by the background, never by the content script. A fetch issued from a page carries that page's origin, so `open.er-api.com` was told the address of every site where a price was hovered, which is exactly what bundling the flags was meant to prevent. It also ran under the visited page's own content security policy, so a site with a strict `connect-src` blocked it and left the tooltip empty on a cold start.
+- The tooltip's clipboard fallback no longer puts a scratch element in the page. It lived in `document.body`, where a site could read the converted amount, or intercept the copy event and substitute its own text while PriceHover still said "Copied".
+- Inline mode never splits the page's own text nodes. It appended without rewriting, but the split alone was enough to make a framework holding that node duplicate the text around the badge.
 
 ### Permissions
 

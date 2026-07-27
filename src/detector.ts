@@ -42,6 +42,8 @@ const SYMBOLS: SymbolSpec[] = [
   both('MX$', 'MXN'), both('CA$', 'CAD'), both('HK$', 'HKD'),
   both('NZ$', 'NZD'), both('A$', 'AUD'), both('R$', 'BRL'),
   both('S$', 'SGD'), both('$U', 'UYU'),
+  // Canada and Australia print the short forms at least as often as CA$/A$.
+  both('C$', 'CAD'), both('AU$', 'AUD'),
 
   // Peru writes both forms.
   both('S/.', 'PEN'), both('S/', 'PEN'),
@@ -71,7 +73,7 @@ export const SYMBOL_BY_TOKEN = new Map(SYMBOLS.map((s) => [s.token, s]));
  * purpose: a price never straddles two lines, but a paragraph break would let
  * unrelated text join up into one match.
  */
-const SPACE_CLASS = ' \\u00A0\\u202F\\u2009';
+const SPACE_CLASS = ' \\u00A0\\u2000-\\u200A\\u202F';
 const SPACE = `[${SPACE_CLASS}]`;
 const GROUP_SEP = `[,.${SPACE_CLASS}]`;
 
@@ -85,12 +87,16 @@ const GROUP_SEP = `[,.${SPACE_CLASS}]`;
  *
  * Up to three decimals so KWD and friends survive; the boundary lookahead
  * below rejects anything longer instead of silently truncating it.
+ *
+ * The plain run is capped at twelve digits. Past that it is an order number, a
+ * hash or an id, and the boundary lookahead turns the overflow into no match at
+ * all rather than into a price of ten quintillion.
  */
 const AMOUNT =
   '(?:' +
   `\\d{1,2}(?:,\\d{2})+,\\d{3}(?:\\.\\d{1,2})?` +
   `|\\d{1,3}(?:${GROUP_SEP}\\d{3}){1,5}(?:[,.]\\d{1,2})?` +
-  `|\\d+(?:[,.]\\d{1,3})?` +
+  `|\\d{1,12}(?:[,.]\\d{1,3})?` +
   ')';
 
 function escapeToken(token: string): string {
@@ -98,37 +104,68 @@ function escapeToken(token: string): string {
   return token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Longest first, so `SAR` wins over `SR` and `R$` over `R`. */
+/**
+ * Longest first, so `SAR` wins over `SR` and `R$` over `R`.
+ *
+ * A qualified dollar is printed both ways, `CA$30` and `CA $30`, so the sign is
+ * allowed to sit one space from its qualifier. Without that, `CA $30` matched
+ * the bare `$` and read as thirty US dollars. The captured token keeps the
+ * space; the lookup in `SYMBOL_BY_TOKEN` strips it.
+ */
 function alternation(specs: SymbolSpec[]): string {
   return specs
     .map((s) => s.token)
     .sort((a, b) => b.length - a.length)
-    .map(escapeToken)
+    .map((token) =>
+      token.length > 1 && token.endsWith('$')
+        ? `${escapeToken(token.slice(0, -1))}${SPACE}?\\$`
+        : escapeToken(token)
+    )
     .join('|');
 }
 
+/** An ISO code stands for itself; every other token is a printed symbol. */
+const isCode = (s: SymbolSpec): boolean => s.token === s.code;
+
 const TIGHT_ALT = alternation(SYMBOLS.filter((s) => s.tight));
-const PREFIX_ALT = alternation(SYMBOLS.filter((s) => s.prefix));
+const PREFIX_ALT = alternation(SYMBOLS.filter((s) => s.prefix && !isCode(s)));
+const CODE_ALT = alternation(SYMBOLS.filter((s) => s.prefix && isCode(s)));
 const SUFFIX_ALT = alternation(SYMBOLS.filter((s) => s.suffix));
 
-// Group layout: 1=tight token, 2=amount | 3=prefix token, 4=amount
-//               5=amount, 6=suffix token
+// Group layout: 1=tight token, 2=amount | 3=symbol token, 4=amount
+//               5=ISO code, 6=amount | 7=amount, 8=suffix token
 //
 // Leading lookbehinds keep a match from starting mid-token. The amount-first
 // branch also refuses a leading `.` or `,` so "1.2345 USD" cannot be salvaged
 // as "2345 USD". The trailing lookahead refuses a truncated amount, so
 // "€1234.5678" yields nothing rather than a wrong €1234.56.
+//
+// An ISO code gets its own branch because it needs the space the symbols do
+// not: `RM5` and `Rp5000` are how those are printed, while a three-letter code
+// glued to digits is `CRC32`, `PHP7`, `COP21`, and never a price.
 const PRICE_SOURCE =
   `(?:(?<![\\p{L}\\d])(${TIGHT_ALT})(${AMOUNT})` +
   `|(?<![\\p{L}\\d])(${PREFIX_ALT})${SPACE}?(${AMOUNT})` +
+  `|(?<![\\p{L}\\d])(${CODE_ALT})${SPACE}(${AMOUNT})` +
   `|(?<![\\p{L}\\d.,])(${AMOUNT})${SPACE}?(${SUFFIX_ALT}))` +
   `(?![\\p{L}\\d])(?![.,]\\d)`;
 
 const PRICE_REGEX = new RegExp(PRICE_SOURCE, 'u');
 const GLOBAL_PRICE_REGEX = new RegExp(PRICE_SOURCE, 'gu');
 
-const LETTER_REGEX = /\p{L}/u;
 const DIGIT_REGEX = /\d/;
+
+/**
+ * ISO codes that are also an English word, a language, a checksum or a summit.
+ * They are accepted only on an amount printed the way money is printed: a
+ * thousands group, or a full two-digit minor unit. `PHP 8.2` is a release,
+ * `PHP 1,299` and `PHP 129.99` are prices.
+ */
+const AMBIGUOUS_CODES = new Set(['PHP', 'TRY', 'CRC', 'COP']);
+const PRICE_SHAPED = new RegExp(`(?:[,.]\\d\\d|${GROUP_SEP}\\d{3})`, 'u');
+
+/** Tokens one character away from prose, where a lone digit means noise. */
+const NEEDS_TWO_DIGITS = new Set(['R', 'S/']);
 const STRIPPABLE_SPACE = new RegExp(`[${SPACE_CLASS}]`, 'g');
 
 /**
@@ -136,12 +173,28 @@ const STRIPPABLE_SPACE = new RegExp(`[${SPACE_CLASS}]`, 'g');
  * so "€10-20% off" stays a single price rather than becoming a €10–€20 range.
  */
 const RANGE_DASH = `${SPACE}*[-‐‑‒–—~]${SPACE}*`;
-const RANGE_AFTER = new RegExp(`^${RANGE_DASH}(${AMOUNT})(?![\\p{L}\\d%‰])`, 'u');
+const RANGE_AFTER = new RegExp(
+  `^${RANGE_DASH}(${AMOUNT})(?![\\p{L}\\d%‰])(?!${SPACE}*[%‰])`,
+  'u'
+);
 const RANGE_BEFORE = new RegExp(`(?<![\\p{L}\\d.,])(${AMOUNT})${RANGE_DASH}$`, 'u');
 const RANGE_BETWEEN = new RegExp(`^${RANGE_DASH}$`, 'u');
 
-/** Currencies whose minor unit is three digits, so `1.234` really is 1.234. */
+/**
+ * Currencies whose minor unit is three digits, so `1.234` really is 1.234.
+ *
+ * Only the dot is affected. Kuwait writes comma thousands and a dot decimal,
+ * exactly like the US: `KD 1,250` is a thousand two hundred and fifty dinars,
+ * `KD 1.250` is one and a quarter.
+ */
 const THREE_DECIMAL_CURRENCIES = new Set(['KWD', 'BHD', 'OMR', 'JOD', 'TND']);
+
+/**
+ * What a thousands group has to look like on its left: one to three digits,
+ * never a leading zero. `0.001` and `0,001` are thousandths, and reading them
+ * as grouping turned a fractional price into 1.
+ */
+const LEADING_GROUP = /^[1-9]\d{0,2}$/;
 
 export function normalizeAmount(raw: string, code: string): number {
   const s = raw.replace(STRIPPABLE_SPACE, '');
@@ -152,22 +205,29 @@ export function normalizeAmount(raw: string, code: string): number {
 
   // Both separators present: the rightmost one is the decimal point, unless it
   // is followed by three digits, in which case both are thousands separators.
+  // A three-decimal currency is the exception, since `1,250.500` is its normal
+  // way of printing a price and not a grouped 1250500.
   if (lastComma !== -1 && lastDot !== -1) {
     const decimalIndex = Math.max(lastComma, lastDot);
-    if (s.length - decimalIndex - 1 === 3) return parseFloat(s.replace(/[,.]/g, ''));
+    const minorUnit = s[decimalIndex] === '.' && THREE_DECIMAL_CURRENCIES.has(code);
+    if (s.length - decimalIndex - 1 === 3 && !minorUnit) {
+      return parseFloat(s.replace(/[,.]/g, ''));
+    }
     const integerPart = s.slice(0, decimalIndex).replace(/[,.]/g, '');
     return parseFloat(`${integerPart}.${s.slice(decimalIndex + 1)}`);
   }
 
   // A single kind of separator. Repeated means grouping (1.234.567). Otherwise
   // the digit count decides: three digits is a thousands separator (3,500 →
-  // 3500) for every currency that does not use three decimals.
+  // 3500) when what precedes it can be a group at all.
   const separator = lastComma !== -1 ? ',' : '.';
   const separatorCount = s.split(separator).length - 1;
-  const digitsAfter = s.length - Math.max(lastComma, lastDot) - 1;
+  const separatorIndex = Math.max(lastComma, lastDot);
+  const digitsAfter = s.length - separatorIndex - 1;
+  const minorUnit = separator === '.' && THREE_DECIMAL_CURRENCIES.has(code);
 
   if (separatorCount > 1) return parseFloat(s.split(separator).join(''));
-  if (digitsAfter === 3 && !THREE_DECIMAL_CURRENCIES.has(code)) {
+  if (digitsAfter === 3 && !minorUnit && LEADING_GROUP.test(s.slice(0, separatorIndex))) {
     return parseFloat(s.split(separator).join(''));
   }
   return parseFloat(s.replace(separator, '.'));
@@ -199,21 +259,37 @@ function parseMatch(
     token = match[3];
     rawAmount = match[4];
     side = 'before';
-  } else if (match[6]) {
-    token = match[6];
-    rawAmount = match[5];
+  } else if (match[5]) {
+    token = match[5];
+    rawAmount = match[6];
+    side = 'before';
+  } else if (match[8]) {
+    token = match[8];
+    rawAmount = match[7];
     side = 'after';
   } else {
     return null;
   }
 
-  const spec = SYMBOL_BY_TOKEN.get(token);
+  // `CA $30` captures the space the alternation allowed inside the token.
+  const spec = SYMBOL_BY_TOKEN.get(token.replace(STRIPPABLE_SPACE, ''));
   if (!spec) return null;
 
-  // A single fraction digit reads as a version or a measurement far more often
-  // than as a price, and alphabetic tokens are the ones that collide with
-  // prose: "PHP 8.2", "Fr 20.5". Sign symbols keep the loose rule.
-  if (LETTER_REGEX.test(token) && /[.,]\d$/.test(rawAmount)) return null;
+  // A minus sign in front is a discount line, and converting it to a positive
+  // amount says the opposite of what the page says. A dash between two digits
+  // is a range and stays allowed.
+  const before = match.input?.slice(0, index) ?? '';
+  const sign = before.at(-1);
+  if ((sign === '-' || sign === '−') && !/\d$/.test(before.slice(0, -1))) return null;
+
+  // These codes are ordinary words or version numbers far more often than
+  // money: "Requires PHP 8", "TRY 100 TIMES", "COP 21". A real price in one of
+  // them is printed like a price, grouped or with a full minor unit.
+  if (AMBIGUOUS_CODES.has(spec.token) && !PRICE_SHAPED.test(rawAmount)) return null;
+
+  // One digit behind a token this short is an identifier: "R2-D2", "Model S/ 3".
+  // A real R5 loses out, which is rarer than the noise the rule keeps out.
+  if (NEEDS_TWO_DIGITS.has(spec.token) && /^\d$/.test(rawAmount)) return null;
 
   // `$`, `kr` and `¥` mean different currencies in different markets. The page
   // resolves them; without a resolver the historical default stands.
@@ -248,12 +324,18 @@ function parseMatch(
  */
 function mergeRanges(text: string, matches: RawMatch[]): DetectedPrice[] {
   const out: DetectedPrice[] = [];
+  // A merged range swallows text a later match already claimed: "€10-20 USD"
+  // produced the range and then 20 USD again, so two hitboxes overlapped and
+  // the second one won.
+  let claimedUntil = 0;
 
   for (let i = 0; i < matches.length; i++) {
     const current = matches[i];
     const price = current.price;
     const start = price.matchStart!;
     const end = price.matchEnd!;
+
+    if (start < claimedUntil) continue;
 
     // Two full matches with nothing but a dash between them.
     const next = matches[i + 1];
@@ -272,7 +354,8 @@ function mergeRanges(text: string, matches: RawMatch[]): DetectedPrice[] {
       if (tail) {
         const max = normalizeAmount(tail[1], price.currencyCode);
         if (Number.isFinite(max) && max > price.amount) {
-          out.push({ ...price, amountMax: max, matchEnd: end + tail[0].length });
+          claimedUntil = end + tail[0].length;
+          out.push({ ...price, amountMax: max, matchEnd: claimedUntil });
           continue;
         }
       }

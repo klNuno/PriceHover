@@ -26,9 +26,6 @@
   "convertToHelp": {
     "message": "Affichées dans l’infobulle, sous votre devise."
   },
-  "shownCount": {
-    "message": "$1 affichées"
-  },
   "settings": {
     "message": "Réglages"
   },
@@ -49,6 +46,12 @@
   },
   "refreshFailed": {
     "message": "Échec de l’actualisation"
+  },
+  "saveFailed": {
+    "message": "Votre modification n’a pas pu être enregistrée."
+  },
+  "loadFailed": {
+    "message": "Impossible de lire vos réglages, rien ne sera enregistré. Réessayez dans un instant."
   },
   "timeJustNow": {
     "message": "à l’instant"
@@ -82,9 +85,6 @@
   },
   "turnOn": {
     "message": "Activer"
-  },
-  "turnOff": {
-    "message": "Désactiver"
   },
   "pauseOnSite": {
     "message": "Suspendre sur $1"
@@ -167,8 +167,26 @@
   "remove": {
     "message": "Retirer"
   },
+  "moveUp": {
+    "message": "Déplacer vers le haut"
+  },
+  "moveDown": {
+    "message": "Déplacer vers le bas"
+  },
+  "invalidSite": {
+    "message": "Ce n’est pas une adresse de site. Essayez exemple.com."
+  },
   "reset": {
     "message": "Réinitialiser"
+  },
+  "resetWarning": {
+    "message": "Cela efface tous les réglages, y compris vos sites suspendus. C’est irréversible."
+  },
+  "resetConfirm": {
+    "message": "Confirmer la réinitialisation"
+  },
+  "resetCancel": {
+    "message": "Annuler"
   },
   "version": {
     "message": "Version $1"

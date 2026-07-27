@@ -1,5 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<!-- No `lang` here: the UI ships in eight locales and App.svelte sets it from
+     chrome.i18n.getUILanguage() on mount. An extension page cannot run an
+     inline script under MV3's CSP, so this is as early as it gets. -->
+<html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

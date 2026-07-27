@@ -26,9 +26,6 @@
   "convertToHelp": {
     "message": "显示在提示框中，位于你的货币下方。"
   },
-  "shownCount": {
-    "message": "显示 $1 种"
-  },
   "settings": {
     "message": "设置"
   },
@@ -49,6 +46,12 @@
   },
   "refreshFailed": {
     "message": "刷新失败"
+  },
+  "saveFailed": {
+    "message": "无法保存你的更改。"
+  },
+  "loadFailed": {
+    "message": "无法读取你的设置，因此不会保存任何更改。请稍后再试。"
   },
   "timeJustNow": {
     "message": "刚刚"
@@ -82,9 +85,6 @@
   },
   "turnOn": {
     "message": "开启"
-  },
-  "turnOff": {
-    "message": "关闭"
   },
   "pauseOnSite": {
     "message": "在 $1 上暂停"
@@ -167,8 +167,26 @@
   "remove": {
     "message": "移除"
   },
+  "moveUp": {
+    "message": "上移"
+  },
+  "moveDown": {
+    "message": "下移"
+  },
+  "invalidSite": {
+    "message": "这不是网站地址。请尝试 example.com。"
+  },
   "reset": {
     "message": "恢复默认"
+  },
+  "resetWarning": {
+    "message": "这会清除所有设置，包括已暂停的网站，且无法撤销。"
+  },
+  "resetConfirm": {
+    "message": "确认恢复默认"
+  },
+  "resetCancel": {
+    "message": "取消"
   },
   "version": {
     "message": "版本 $1"

@@ -26,9 +26,6 @@
   "convertToHelp": {
     "message": "Shown in the tooltip, under your own currency."
   },
-  "shownCount": {
-    "message": "$1 shown"
-  },
   "settings": {
     "message": "Settings"
   },
@@ -49,6 +46,12 @@
   },
   "refreshFailed": {
     "message": "Refresh failed"
+  },
+  "saveFailed": {
+    "message": "Your change could not be saved."
+  },
+  "loadFailed": {
+    "message": "Your settings could not be read, so nothing will be saved. Try again in a moment."
   },
   "timeJustNow": {
     "message": "just now"
@@ -82,9 +85,6 @@
   },
   "turnOn": {
     "message": "Turn on"
-  },
-  "turnOff": {
-    "message": "Turn off"
   },
   "pauseOnSite": {
     "message": "Pause on $1"
@@ -167,8 +167,26 @@
   "remove": {
     "message": "Remove"
   },
+  "moveUp": {
+    "message": "Move up"
+  },
+  "moveDown": {
+    "message": "Move down"
+  },
+  "invalidSite": {
+    "message": "That is not a site address. Try example.com."
+  },
   "reset": {
     "message": "Reset to defaults"
+  },
+  "resetWarning": {
+    "message": "This clears every setting, including your paused sites. It cannot be undone."
+  },
+  "resetConfirm": {
+    "message": "Confirm reset"
+  },
+  "resetCancel": {
+    "message": "Cancel"
   },
   "version": {
     "message": "Version $1"

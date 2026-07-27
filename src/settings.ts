@@ -43,9 +43,59 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export const HOVER_DELAY_CHOICES = [0, 120, 180, 300, 500] as const;
 
-/** `www.` is noise: a user disabling `www.amazon.fr` means `amazon.fr`. */
+/**
+ * A fresh copy nothing else owns. `{ ...DEFAULT_SETTINGS }` is shallow, so the
+ * arrays stayed shared with the module-level constant and one `.push` through a
+ * Svelte `$state` proxy would have poisoned the defaults for the whole context.
+ */
+export function defaultSettings(): Settings {
+  return {
+    ...DEFAULT_SETTINGS,
+    disabledSites: [...DEFAULT_SETTINGS.disabledSites],
+    targetCurrencies: [...DEFAULT_SETTINGS.targetCurrencies],
+  };
+}
+
+/**
+ * A hostname, minus everything that cannot take part in the comparison against
+ * `location.hostname`: scheme, credentials, port, path, `www.`, case, spaces.
+ * `HTTPS://WWW.Amazon.ca:443/dp/x` and `amazon.ca` are the same site.
+ *
+ * Total by contract: it is called from `parseSettings`, which accepts anything.
+ */
 export function normalizeHostname(hostname: string): string {
-  return hostname.toLowerCase().replace(/^www\./, '');
+  return String(hostname)
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(/^[^/@]*@/, '')
+    .split(/[/?#]/)[0]
+    .replace(/:\d*$/, '')
+    .replace(/^www\./, '')
+    .replace(/\.$/, '');
+}
+
+/**
+ * Non-empty labels separated by dots, or a bracketed IPv6 literal. Deliberately
+ * permissive: intranet hosts have no TLD, `my_host.local` has an underscore and
+ * a hand-typed IDN is not ASCII. It only rejects what `location.hostname` can
+ * never produce, which after `normalizeHostname` means whitespace and leftover
+ * URL punctuation.
+ */
+const HOSTNAME_RE = /^(?:\[[0-9a-f:]+\]|[^\s.:/?#@]+(?:\.[^\s.:/?#@]+)*)$/u;
+
+/**
+ * What the user typed, as a site identity, or `null` when it cannot be one.
+ * Silently keeping `my site` or `example.com:8080` in the paused list looked
+ * like it worked and then never matched a single page.
+ *
+ * Input path only. Stored entries go through `normalizeHostname` alone: this is
+ * strict enough to reject an entry the user is about to add, and far too strict
+ * to delete one they added years ago.
+ */
+export function parseHostnameInput(raw: string): string | null {
+  const host = normalizeHostname(raw);
+  return host && HOSTNAME_RE.test(host) ? host : null;
 }
 
 export function isSiteDisabled(settings: Settings, hostname: string): boolean {
@@ -95,8 +145,15 @@ export function parseSettings(raw: unknown): Settings {
 
   return {
     enabled: input.enabled !== false,
+    // Normalised, never validated: `updateSettings` writes this object straight
+    // back, so anything dropped here is deleted from the user's list for good.
     disabledSites: Array.isArray(input.disabledSites)
-      ? [...new Set(input.disabledSites.filter((s): s is string => typeof s === 'string').map(normalizeHostname))]
+      ? [...new Set(
+          input.disabledSites
+            .filter((s): s is string => typeof s === 'string')
+            .map(normalizeHostname)
+            .filter((s) => s !== '')
+        )]
       : [],
     baseCurrency,
     targetCurrencies: targets,
@@ -123,20 +180,54 @@ export function migrateLegacy(legacy: unknown): Settings | null {
   return { ...DEFAULT_SETTINGS, baseCurrency, targetCurrencies };
 }
 
-export async function loadSettings(): Promise<Settings> {
+/**
+ * `stored`: real data was read back.
+ * `empty`:  the read worked and there was nothing there yet (first run).
+ * `failed`: the read itself failed, so `settings` is a guess and writing it back
+ *           would persist defaults over data we simply could not see.
+ */
+export type SettingsSource = 'stored' | 'empty' | 'failed';
+
+export interface SettingsLoad {
+  source: SettingsSource;
+  settings: Settings;
+  error?: unknown;
+}
+
+function firstRunSettings(): Settings {
+  return {
+    ...defaultSettings(),
+    targetCurrencies: DEFAULT_CURRENCIES.filter((c) => c !== DEFAULT_SETTINGS.baseCurrency),
+  };
+}
+
+/**
+ * Never rejects, but says where the answer came from. A UI that cannot tell a
+ * failed read from an empty one will happily overwrite everything on the user's
+ * next click.
+ */
+export async function readSettings(): Promise<SettingsLoad> {
   try {
     const stored = await chrome.storage.local.get([STORAGE.SETTINGS, STORAGE.CURRENCIES]);
-    if (stored?.[STORAGE.SETTINGS]) return parseSettings(stored[STORAGE.SETTINGS]);
+    if (stored?.[STORAGE.SETTINGS]) {
+      return { source: 'stored', settings: parseSettings(stored[STORAGE.SETTINGS]) };
+    }
 
     const migrated = migrateLegacy(stored?.[STORAGE.CURRENCIES]);
     if (migrated) {
       await saveSettings(migrated).catch(() => {});
-      return migrated;
+      return { source: 'stored', settings: migrated };
     }
-  } catch {
+  } catch (error) {
     // Storage can be stubbed (some extension wrappers) and defaults still work.
+    return { source: 'failed', settings: firstRunSettings(), error };
   }
-  return { ...DEFAULT_SETTINGS, targetCurrencies: DEFAULT_CURRENCIES.filter((c) => c !== DEFAULT_SETTINGS.baseCurrency) };
+  return { source: 'empty', settings: firstRunSettings() };
+}
+
+/** Usable settings, whatever happened. Callers that must not write use this one. */
+export async function loadSettings(): Promise<Settings> {
+  return (await readSettings()).settings;
 }
 
 /**
@@ -156,6 +247,43 @@ function toPlain(settings: Settings): Settings {
 
 export async function saveSettings(settings: Settings): Promise<void> {
   await chrome.storage.local.set({ [STORAGE.SETTINGS]: toPlain(settings) });
+}
+
+/**
+ * A patch, or a function receiving what storage holds right now. Use the
+ * function form whenever the new value is derived from the old one (every list:
+ * paused sites, target currencies), otherwise the array is computed from the
+ * caller's snapshot and carries its staleness into the write.
+ */
+export type SettingsPatch = Partial<Settings> | ((current: Settings) => Partial<Settings>);
+
+async function applyUpdate(patch: SettingsPatch): Promise<Settings> {
+  const load = await readSettings();
+  if (load.source === 'failed') throw load.error ?? new Error('settings could not be read');
+
+  const resolved = typeof patch === 'function' ? patch(load.settings) : patch;
+  const next = parseSettings({ ...load.settings, ...resolved });
+  await saveSettings(next);
+  return next;
+}
+
+/** One write at a time: read-modify-write interleaved is the same lost update, inside one document. */
+let writeQueue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Applies a patch to what storage holds *now*, not to whatever the caller read
+ * minutes ago. The popup and the options page are separate documents writing the
+ * same single key: pausing a site in one and flipping a switch in the other used
+ * to hand the whole object back from a stale snapshot, silently unpausing the
+ * site. Only the patched fields can change.
+ *
+ * Rejects rather than guessing when the read failed, so a caller can tell the
+ * user the setting was not saved.
+ */
+export function updateSettings(patch: SettingsPatch): Promise<Settings> {
+  const run = writeQueue.then(() => applyUpdate(patch), () => applyUpdate(patch));
+  writeQueue = run.catch(() => {});
+  return run;
 }
 
 /** Calls back on every change to the settings key, already parsed. */

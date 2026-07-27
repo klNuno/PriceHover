@@ -26,9 +26,6 @@
   "convertToHelp": {
     "message": "ツールチップ内、自国通貨の下に表示されます。"
   },
-  "shownCount": {
-    "message": "$1 件表示"
-  },
   "settings": {
     "message": "設定"
   },
@@ -49,6 +46,12 @@
   },
   "refreshFailed": {
     "message": "更新に失敗しました"
+  },
+  "saveFailed": {
+    "message": "変更を保存できませんでした。"
+  },
+  "loadFailed": {
+    "message": "設定を読み込めなかったため、変更は保存されません。しばらくしてからもう一度お試しください。"
   },
   "timeJustNow": {
     "message": "たった今"
@@ -82,9 +85,6 @@
   },
   "turnOn": {
     "message": "オンにする"
-  },
-  "turnOff": {
-    "message": "オフにする"
   },
   "pauseOnSite": {
     "message": "$1 で一時停止"
@@ -167,8 +167,26 @@
   "remove": {
     "message": "削除"
   },
+  "moveUp": {
+    "message": "上へ移動"
+  },
+  "moveDown": {
+    "message": "下へ移動"
+  },
+  "invalidSite": {
+    "message": "サイトのアドレスではありません。example.com のように入力してください。"
+  },
   "reset": {
     "message": "初期設定に戻す"
+  },
+  "resetWarning": {
+    "message": "一時停止中のサイトを含め、すべての設定が消えます。元に戻せません。"
+  },
+  "resetConfirm": {
+    "message": "リセットを確認"
+  },
+  "resetCancel": {
+    "message": "キャンセル"
   },
   "version": {
     "message": "バージョン $1"

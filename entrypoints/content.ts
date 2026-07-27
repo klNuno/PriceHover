@@ -4,7 +4,9 @@ import { detectPricesFromElement, detectPriceFromText } from '../src/detector';
 import { createInlineAnnotator, INLINE_ATTR } from '../src/inline';
 import { makeTokenResolver } from '../src/locale';
 import type { TokenResolver } from '../src/locale';
-import { fetchRates, parseRates } from '../src/rates';
+import { MESSAGE, send } from '../src/messages';
+import type { RefreshResult } from '../src/messages';
+import { parseRates } from '../src/rates';
 import { isActiveOn, loadSettings, watchSettings } from '../src/settings';
 import type { Settings } from '../src/settings';
 import Tooltip from '../src/tooltip.svelte';
@@ -34,44 +36,64 @@ export default defineContentScript({
     let ratesTimestamp = 0;
     let ratesPromise: Promise<void> | null = null;
 
-    async function fetchDirect(): Promise<void> {
+    /** How long to leave a failed refresh alone before asking again. */
+    const RETRY_AFTER_MS = 60_000;
+    let lastFailure = 0;
+
+    /**
+     * The fetch itself belongs to the background, and asking for it is all this
+     * script does. A fetch issued from a content script carries the visited
+     * page's origin, which would hand open.er-api.com the address of every page
+     * a price was hovered on, and it runs under the page's own CSP, so a site
+     * with a strict `connect-src` blocked it outright and left the tooltip
+     * empty. PRIVACY.md promises neither of those, and the background has both
+     * the host permission and no page to answer to.
+     */
+    async function requestRefresh(): Promise<void> {
+      // A rate endpoint that is down must not turn a page of prices into one
+      // message per hover.
+      if (Date.now() - lastFailure < RETRY_AFTER_MS) return;
+
       try {
-        const fetched = await fetchRates();
-        if (!fetched) return;
-        rates = fetched;
-        ratesTimestamp = Date.now();
-        try {
-          await chrome.storage.local.set({
-            [STORAGE.RATES]: fetched,
-            [STORAGE.RATES_TS]: ratesTimestamp,
-          });
-        } catch { /* storage may be stubbed by an extension wrapper */ }
+        const result = await send<RefreshResult>(MESSAGE.REFRESH_RATES);
+        if (!result?.ok) { lastFailure = Date.now(); return; }
+        await readStoredRates();
       } catch (err) {
-        E('direct rate fetch failed', err);
+        lastFailure = Date.now();
+        E('rate refresh failed', err);
       }
+    }
+
+    async function readStoredRates(): Promise<void> {
+      const stored = await chrome.storage.local.get([STORAGE.RATES, STORAGE.RATES_TS]);
+      const parsed = parseRates(stored?.[STORAGE.RATES]);
+      if (!parsed) return;
+      rates = parsed;
+      const ts = stored?.[STORAGE.RATES_TS];
+      ratesTimestamp = typeof ts === 'number' ? ts : 0;
     }
 
     function ensureRates(): Promise<void> {
       if (!ratesPromise) {
         ratesPromise = (async () => {
           try {
-            const stored = await chrome.storage.local.get([STORAGE.RATES, STORAGE.RATES_TS]);
-            const parsed = parseRates(stored?.[STORAGE.RATES]);
-            if (parsed) {
-              rates = parsed;
-              const ts = stored?.[STORAGE.RATES_TS];
-              ratesTimestamp = typeof ts === 'number' ? ts : 0;
-            }
-            if (!rates || Date.now() - ratesTimestamp > CACHE_DURATION_MS) await fetchDirect();
+            await readStoredRates();
+            if (!rates || ratesAge() > CACHE_DURATION_MS) await requestRefresh();
           } catch {
-            if (!rates) await fetchDirect();
+            if (!rates) await requestRefresh();
           }
         })().finally(() => { ratesPromise = null; });
       }
       return ratesPromise;
     }
 
-    const ratesAreStale = (): boolean => Date.now() - ratesTimestamp > STALE_AFTER_MS;
+    /**
+     * Absolute, because a clock set back leaves a timestamp in the future.
+     * Signed arithmetic made that look infinitely fresh, so the rates were never
+     * refreshed again and nothing warned about it either.
+     */
+    const ratesAge = (): number => Math.abs(Date.now() - ratesTimestamp);
+    const ratesAreStale = (): boolean => ratesAge() > STALE_AFTER_MS;
 
     // ── Currency resolution from the page ────────────────────────────────────
 
@@ -91,7 +113,10 @@ export default defineContentScript({
     let tooltipInstance: ReturnType<typeof mount> | null = null;
 
     function ensureTooltip(): HTMLDivElement {
-      if (host) return host;
+      // Not just "built once": an SPA that replaces document.body takes the
+      // host with it, and the tooltip then updated state nothing rendered.
+      if (host?.isConnected) return host;
+      if (host) destroyTooltipHost();
 
       host = document.createElement('div');
       host.id = 'pricehover-root';
@@ -120,7 +145,9 @@ export default defineContentScript({
     // ── Detection cache ──────────────────────────────────────────────────────
 
     interface CachedDetection { text: string; prices: DetectedPrice[] }
-    const detectionCache = new WeakMap<Element, CachedDetection>();
+    // Keyed on the element's text alone, so the resolver and the currency list
+    // are not part of it. Changing either has to throw the whole thing away.
+    let detectionCache = new WeakMap<Element, CachedDetection>();
 
     function detectWithCache(element: Element): DetectedPrice[] {
       const text = element.textContent ?? '';
@@ -255,6 +282,10 @@ export default defineContentScript({
     let pending: { price: DetectedPrice; rect: DOMRect } | null = null;
 
     function show(price: DetectedPrice, rect: DOMRect): void {
+      // A tab left open for a week converted at week-old rates: the staleness
+      // check only ever ran when there were no rates at all.
+      if (rates && ratesAge() > CACHE_DURATION_MS) void ensureRates();
+
       if (!rates) {
         pending = { price, rect };
         ensureRates().then(() => {
@@ -533,6 +564,7 @@ export default defineContentScript({
       if (!wasActive) { startListening(); return; }
 
       // A changed resolver or currency list invalidates every cached detection.
+      detectionCache = new WeakMap();
       clearHover();
       hide();
       syncInlineMode();
@@ -544,7 +576,14 @@ export default defineContentScript({
       if (area !== 'local') return;
       if (changes[STORAGE.RATES]) {
         const next = parseRates(changes[STORAGE.RATES].newValue);
-        if (next) rates = next;
+        if (next) {
+          const first = !rates;
+          rates = next;
+          lastFailure = 0;
+          // Inline mode gives up when it runs with no rates, and a first fetch
+          // that finished after the page did left the page bare for good.
+          if (first) annotator?.refresh();
+        }
       }
       if (changes[STORAGE.RATES_TS]) {
         const ts = changes[STORAGE.RATES_TS].newValue;

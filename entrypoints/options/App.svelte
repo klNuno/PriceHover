@@ -1,83 +1,170 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { CURRENCIES, CURRENCY_BY_CODE, flagToCountryCode } from '../../src/currencies';
   import { flagImage } from '../../src/flags';
   import { formatCurrencyAmount } from '../../src/formatter';
-  import { t } from '../../src/i18n';
+  import { t, uiLocale } from '../../src/i18n';
   import { MESSAGE, send } from '../../src/messages';
   import {
-    DEFAULT_SETTINGS, HOVER_DELAY_CHOICES, loadSettings, normalizeHostname, saveSettings,
+    HOVER_DELAY_CHOICES, defaultSettings, parseHostnameInput, readSettings, updateSettings,
+    watchSettings,
   } from '../../src/settings';
-  import type { Rounding, Settings } from '../../src/settings';
+  import type { Rounding, Settings, SettingsPatch } from '../../src/settings';
   import { formatAgo } from '../../src/time';
   import { STALE_AFTER_MS, STORAGE } from '../../src/types';
 
-  let settings = $state<Settings>({ ...DEFAULT_SETTINGS });
+  let settings = $state<Settings>(defaultSettings());
   let ratesTimestamp = $state(0);
   let refreshing = $state(false);
   let error = $state('');
+  let siteError = $state('');
   let addSite = $state('');
   let currencyFilter = $state('');
   let showWelcome = $state(false);
+  let confirmingReset = $state(false);
+  let loaded = $state(false);
+  /** False until a read actually succeeded: writing before that persists defaults over real data. */
+  let canSave = $state(false);
 
   const version = chrome.runtime.getManifest().version;
+  let unwatch: (() => void) | null = null;
+  let unwatchRates: (() => void) | null = null;
 
   onMount(async () => {
+    // The page ships in eight locales, so the document language cannot be a
+    // constant in the HTML.
+    document.documentElement.lang = uiLocale();
+
     // The background opens this page with #welcome on a fresh install, so the
     // banner needs no storage flag of its own.
     showWelcome = location.hash === '#welcome';
+
+    // Subscribed before the first await, for two reasons: a write landing while
+    // we read would fire into no listener, and a tab closed that fast would run
+    // `onDestroy` before the assignment and leak the listener.
+    // A popup, or a second options tab, writes the same key. Without this, the
+    // snapshot goes stale and the next write hands back yesterday's list.
+    let live = false;
     try {
-      settings = await loadSettings();
-      const stored = await chrome.storage.local.get([STORAGE.RATES, STORAGE.RATES_TS]);
-      const ts = stored?.[STORAGE.RATES_TS];
-      ratesTimestamp = typeof ts === 'number' ? ts : 0;
+      unwatch = watchSettings((next) => {
+        live = true;
+        settings = next;
+        canSave = true;
+        if (error === t('loadFailed')) error = '';
+      });
+      // This tab outlives a background refresh, so the rates label cannot be
+      // read once and left.
+      unwatchRates = watchRatesTimestamp((next) => (ratesTimestamp = next));
     } catch (e) {
-      error = String(e);
+      console.error('[PH] cannot watch storage', e);
+    }
+
+    const load = await readSettings();
+    if (!live) settings = load.settings; // a change event already brought something newer
+    canSave = canSave || load.source !== 'failed';
+    if (load.source === 'failed') {
+      console.error('[PH] settings read failed', load.error);
+      if (!canSave) error = t('loadFailed');
+    }
+    loaded = true;
+
+    try {
+      const stored = await chrome.storage.local.get([STORAGE.RATES_TS]);
+      const ts = stored?.[STORAGE.RATES_TS];
+      if (!ratesTimestamp) ratesTimestamp = typeof ts === 'number' ? ts : 0;
+    } catch (e) {
+      console.error('[PH] rates timestamp read failed', e);
     }
   });
 
-  async function update(patch: Partial<Settings>): Promise<void> {
-    settings = { ...settings, ...patch };
+  onDestroy(() => { unwatch?.(); unwatchRates?.(); });
+
+  function watchRatesTimestamp(onChange: (timestamp: number) => void): () => void {
+    const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, areaName) => {
+      if (areaName !== 'local' || !changes[STORAGE.RATES_TS]) return;
+      const next = changes[STORAGE.RATES_TS].newValue;
+      onChange(typeof next === 'number' ? next : 0);
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }
+
+  /**
+   * The new value lands in `settings` only once storage has taken it, so the UI
+   * can never show a switch the browser did not persist. `restore` puts back a
+   * control the browser changed on its own (a checkbox and a select both commit
+   * before the handler runs, and an unchanged `settings` re-renders to nothing).
+   */
+  async function update(patch: SettingsPatch, restore?: () => void): Promise<void> {
+    if (!canSave) { if (loaded) error = t('loadFailed'); restore?.(); return; }
     try {
-      await saveSettings(settings);
+      settings = await updateSettings(patch);
       error = '';
     } catch (e) {
-      error = String(e);
+      console.error('[PH] settings write failed', e);
+      error = t('saveFailed');
+      restore?.();
     }
   }
 
-  function setBase(code: string): void {
+  // Everything derived from a list reads that list back from storage rather than
+  // from the local snapshot: two quick clicks would otherwise both build on the
+  // value read before the first write, and the second would drop the first.
+  function setBase(select: HTMLSelectElement): void {
+    const code = select.value;
     // The base can never also be a target: it would appear twice in the tooltip.
-    update({ baseCurrency: code, targetCurrencies: settings.targetCurrencies.filter((c) => c !== code) });
+    void update(
+      (current) => ({ baseCurrency: code, targetCurrencies: current.targetCurrencies.filter((c) => c !== code) }),
+      () => { select.value = settings.baseCurrency; }
+    );
+  }
+
+  function toggle(key: 'enabled' | 'inlineMode' | 'usePageContext', box: HTMLInputElement): void {
+    void update({ [key]: box.checked }, () => { box.checked = settings[key]; });
   }
 
   function addTarget(code: string): void {
     if (code === settings.baseCurrency || settings.targetCurrencies.includes(code)) return;
-    update({ targetCurrencies: [...settings.targetCurrencies, code] });
+    void update((current) => ({
+      targetCurrencies: current.targetCurrencies.includes(code)
+        ? current.targetCurrencies
+        : [...current.targetCurrencies, code],
+    }));
   }
 
   function removeTarget(code: string): void {
-    update({ targetCurrencies: settings.targetCurrencies.filter((c) => c !== code) });
+    void update((current) => ({ targetCurrencies: current.targetCurrencies.filter((c) => c !== code) }));
   }
 
   function moveTarget(code: string, delta: number): void {
-    const next = [...settings.targetCurrencies];
-    const from = next.indexOf(code);
-    const to = from + delta;
-    if (from === -1 || to < 0 || to >= next.length) return;
-    [next[from], next[to]] = [next[to], next[from]];
-    update({ targetCurrencies: next });
+    void update((current) => {
+      const next = [...current.targetCurrencies];
+      const from = next.indexOf(code);
+      const to = from + delta;
+      if (from === -1 || to < 0 || to >= next.length) return {};
+      [next[from], next[to]] = [next[to], next[from]];
+      return { targetCurrencies: next };
+    });
   }
 
   function pauseSite(): void {
-    const host = normalizeHostname(addSite.trim().replace(/^https?:\/\//, '').split('/')[0]);
-    if (!host || settings.disabledSites.includes(host)) { addSite = ''; return; }
-    update({ disabledSites: [...settings.disabledSites, host] });
+    if (!addSite.trim()) return;
+    // A port, a space or a stray path can never match `location.hostname`, so
+    // the entry would sit in the list looking effective and pausing nothing.
+    const host = parseHostnameInput(addSite);
+    if (!host) { siteError = t('invalidSite'); return; }
+
+    siteError = '';
     addSite = '';
+    void update((current) => ({
+      disabledSites: current.disabledSites.includes(host)
+        ? current.disabledSites
+        : [...current.disabledSites, host],
+    }));
   }
 
   function resumeSite(host: string): void {
-    update({ disabledSites: settings.disabledSites.filter((s) => s !== host) });
+    void update((current) => ({ disabledSites: current.disabledSites.filter((s) => s !== host) }));
   }
 
   async function refresh(): Promise<void> {
@@ -89,8 +176,29 @@
     ratesTimestamp = result.timestamp ?? Date.now();
   }
 
-  function reset(): void {
-    update({ ...DEFAULT_SETTINGS });
+  /** Two steps on purpose: one stray click used to take the whole paused-site list with it. */
+  function confirmReset(): void {
+    confirmingReset = false;
+    void update(defaultSettings());
+  }
+
+  /**
+   * ARIA's radiogroup is one tab stop: arrows move the selection, Home and End
+   * jump to the ends. The segmented controls looked like this already and
+   * behaved like a row of unrelated buttons.
+   */
+  function onSegmentKeydown(event: KeyboardEvent, index: number, count: number, select: (index: number) => void): void {
+    let next = index;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % count;
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (index - 1 + count) % count;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = count - 1;
+    else return;
+
+    event.preventDefault();
+    const group = (event.currentTarget as HTMLElement).parentElement;
+    (group?.children[next] as HTMLElement | undefined)?.focus();
+    select(next);
   }
 
   const targetCurrencies = $derived(
@@ -119,6 +227,13 @@
   const roundingLabel: Record<Rounding, string> = {
     exact: 'roundingExact', smart: 'roundingSmart', integer: 'roundingInteger',
   };
+
+  // Which option holds the group's single tab stop. A stored value outside the
+  // offered choices would otherwise leave the whole group unreachable by keyboard.
+  const delayIndex = $derived(
+    Math.max((HOVER_DELAY_CHOICES as readonly number[]).indexOf(settings.hoverDelayMs), 0)
+  );
+  const roundingIndex = $derived(Math.max(ROUNDING_MODES.indexOf(settings.rounding), 0));
   const roundingSample = $derived.by(() => {
     const map = {} as Record<Rounding, string>;
     for (const mode of ROUNDING_MODES) {
@@ -164,7 +279,7 @@
           {#if flagOf(settings.baseCurrency)}
             <img class="flag" src={flagOf(settings.baseCurrency)} alt="" />
           {/if}
-          <select id="base" value={settings.baseCurrency} onchange={(e) => setBase(e.currentTarget.value)}>
+          <select id="base" value={settings.baseCurrency} onchange={(e) => setBase(e.currentTarget)}>
             {#each CURRENCIES as currency (currency.code)}
               <option value={currency.code}>{currency.code} · {currency.name}</option>
             {/each}
@@ -185,16 +300,22 @@
               <span class="code">{currency.code}</span>
               <span class="name">{currency.name}</span>
               <button
-                class="icon" type="button" title="↑"
+                class="icon" type="button"
+                title={t('moveUp')} aria-label={`${t('moveUp')}: ${currency.code}`}
                 disabled={index === 0}
                 onclick={() => moveTarget(currency.code, -1)}
-              >↑</button>
+              ><span aria-hidden="true">↑</span></button>
               <button
-                class="icon" type="button" title="↓"
+                class="icon" type="button"
+                title={t('moveDown')} aria-label={`${t('moveDown')}: ${currency.code}`}
                 disabled={index === targetCurrencies.length - 1}
                 onclick={() => moveTarget(currency.code, 1)}
-              >↓</button>
-              <button class="icon" type="button" title={t('remove')} onclick={() => removeTarget(currency.code)}>✕</button>
+              ><span aria-hidden="true">↓</span></button>
+              <button
+                class="icon" type="button"
+                title={t('remove')} aria-label={`${t('remove')}: ${currency.code}`}
+                onclick={() => removeTarget(currency.code)}
+              ><span aria-hidden="true">✕</span></button>
             </li>
           {:else}
             <li class="muted">{t('noResults')}</li>
@@ -232,7 +353,11 @@
         {#each settings.disabledSites as host (host)}
           <li>
             <span class="host">{host}</span>
-            <button class="icon" type="button" title={t('remove')} onclick={() => resumeSite(host)}>✕</button>
+            <button
+              class="icon" type="button"
+              title={t('remove')} aria-label={`${t('remove')}: ${host}`}
+              onclick={() => resumeSite(host)}
+            ><span aria-hidden="true">✕</span></button>
           </li>
         {:else}
           <li class="muted">{t('pausedSitesEmpty')}</li>
@@ -243,10 +368,16 @@
           type="text"
           placeholder={t('addSitePlaceholder')}
           aria-label={t('pausedSites')}
+          aria-invalid={siteError ? 'true' : undefined}
+          aria-describedby={siteError ? 'add-site-error' : undefined}
           bind:value={addSite}
+          oninput={() => (siteError = '')}
         />
         <button type="submit">{t('add')}</button>
       </form>
+      {#if siteError}
+        <p class="field-error" id="add-site-error" role="alert">{siteError}</p>
+      {/if}
     </section>
     </div>
 
@@ -255,36 +386,44 @@
       <h2>{t('sectionBehaviour')}</h2>
 
       <label class="switch">
-        <input type="checkbox" checked={settings.enabled} onchange={(e) => update({ enabled: e.currentTarget.checked })} />
+        <input type="checkbox" checked={settings.enabled} onchange={(e) => toggle('enabled', e.currentTarget)} />
         <span>{t('enabledEverywhere')}</span>
       </label>
       <p class="help">{t('enabledEverywhereHelp')}</p>
 
       <div class="field">
-        <span class="label">{t('hoverDelay')}</span>
+        <span class="label" id="hover-delay-label">{t('hoverDelay')}</span>
         <p class="help">{t('hoverDelayHelp')}</p>
-        <div class="segments" role="group" aria-label={t('hoverDelay')}>
-          {#each HOVER_DELAY_CHOICES as choice (choice)}
+        <div class="segments" role="radiogroup" aria-labelledby="hover-delay-label">
+          {#each HOVER_DELAY_CHOICES as choice, index (choice)}
             <button
               type="button"
+              role="radio"
               class:on={settings.hoverDelayMs === choice}
-              aria-pressed={settings.hoverDelayMs === choice}
+              aria-checked={settings.hoverDelayMs === choice}
+              tabindex={index === delayIndex ? 0 : -1}
               onclick={() => update({ hoverDelayMs: choice })}
+              onkeydown={(e) => onSegmentKeydown(e, index, HOVER_DELAY_CHOICES.length,
+                (next) => update({ hoverDelayMs: HOVER_DELAY_CHOICES[next] }))}
             >{choice === 0 ? t('delayInstant') : `${choice} ms`}</button>
           {/each}
         </div>
       </div>
 
       <div class="field">
-        <span class="label">{t('rounding')}</span>
+        <span class="label" id="rounding-label">{t('rounding')}</span>
         <p class="help">{t('roundingHelp')}</p>
-        <div class="segments" role="group" aria-label={t('rounding')}>
-          {#each ROUNDING_MODES as mode (mode)}
+        <div class="segments" role="radiogroup" aria-labelledby="rounding-label">
+          {#each ROUNDING_MODES as mode, index (mode)}
             <button
               type="button"
+              role="radio"
               class:on={settings.rounding === mode}
-              aria-pressed={settings.rounding === mode}
+              aria-checked={settings.rounding === mode}
+              tabindex={index === roundingIndex ? 0 : -1}
               onclick={() => update({ rounding: mode })}
+              onkeydown={(e) => onSegmentKeydown(e, index, ROUNDING_MODES.length,
+                (next) => update({ rounding: ROUNDING_MODES[next] }))}
             >{t(roundingLabel[mode])}</button>
           {/each}
         </div>
@@ -292,13 +431,13 @@
       </div>
 
       <label class="switch">
-        <input type="checkbox" checked={settings.inlineMode} onchange={(e) => update({ inlineMode: e.currentTarget.checked })} />
+        <input type="checkbox" checked={settings.inlineMode} onchange={(e) => toggle('inlineMode', e.currentTarget)} />
         <span>{t('inlineMode')}</span>
       </label>
       <p class="help">{t('inlineModeHelp')}</p>
 
       <label class="switch">
-        <input type="checkbox" checked={settings.usePageContext} onchange={(e) => update({ usePageContext: e.currentTarget.checked })} />
+        <input type="checkbox" checked={settings.usePageContext} onchange={(e) => toggle('usePageContext', e.currentTarget)} />
         <span>{t('pageContext')}</span>
       </label>
       <p class="help">{t('pageContextHelp')}</p>
@@ -318,12 +457,26 @@
           {t('privacyPolicy')}
         </a>
       </p>
-      <button class="danger" type="button" onclick={reset}>{t('reset')}</button>
+      {#if confirmingReset}
+        <p class="reset-warning" role="alert">{t('resetWarning')}</p>
+      {/if}
+      <!-- One button that changes its own label, never two swapped in and out:
+           unmounting the one the user just pressed drops keyboard focus to the
+           body, which is where a confirmation step must not send anyone. -->
+      <div class="reset-row">
+        <button
+          class="danger" type="button"
+          onclick={() => (confirmingReset ? confirmReset() : (confirmingReset = true))}
+        >{confirmingReset ? t('resetConfirm') : t('reset')}</button>
+        {#if confirmingReset}
+          <button type="button" onclick={() => (confirmingReset = false)}>{t('resetCancel')}</button>
+        {/if}
+      </div>
     </section>
     </div>
   </div>
 
-  {#if error}<div class="err">{error}</div>{/if}
+  {#if error}<div class="err" role="alert">{error}</div>{/if}
 </main>
 
 <style>
@@ -450,6 +603,11 @@
   .sample { margin-top: 6px; font-size: 12px; color: var(--green); font-weight: 600; }
 
   .add-site { display: flex; gap: 6px; margin-top: 8px; }
+  .field-error { margin-top: 6px; font-size: 12px; color: var(--danger); }
+
+  .reset-warning { margin-top: 12px; font-size: 12px; color: var(--danger); }
+  .reset-row { display: flex; gap: 6px; margin-top: 12px; }
+  .reset-row button { margin-top: 0; }
 
   .rates-row { display: flex; align-items: center; gap: 10px; font-size: 13px; margin-bottom: 10px; }
   .rates-row span { margin-right: auto; color: var(--fg2); }
@@ -457,5 +615,5 @@
 
   a { color: var(--focus); font-size: 12px; }
 
-  .err { margin-top: 16px; padding: 8px 10px; border: 1px solid var(--danger); border-radius: 6px; color: var(--danger); font-family: monospace; font-size: 12px; }
+  .err { margin-top: 16px; padding: 8px 10px; border: 1px solid var(--danger); border-radius: 6px; color: var(--danger); font-size: 12px; }
 </style>
