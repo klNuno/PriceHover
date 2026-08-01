@@ -29,6 +29,15 @@
   "settings": {
     "message": "Réglages"
   },
+  "cryptoEnabled": {
+    "message": "Bitcoin et autres cryptos"
+  },
+  "cryptoEnabledHelp": {
+    "message": "Ajoute 24 cryptos. Leurs taux viennent de api.coingecko.com, un second hôte contacté uniquement tant que ceci est activé, environ une fois par heure."
+  },
+  "cryptoDenied": {
+    "message": "La crypto reste désactivée sans accès à api.coingecko.com."
+  },
   "ratesUpdated": {
     "message": "Taux $1"
   },

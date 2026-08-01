@@ -1,19 +1,22 @@
 import { mount, unmount } from 'svelte';
 import { convertPrice } from '../src/convert';
-import { detectPricesFromElement, detectPriceFromText } from '../src/detector';
+import { detectPricesFromElement, detectPriceFromText, setCryptoDetection } from '../src/detector';
 import { createInlineAnnotator, INLINE_ATTR } from '../src/inline';
 import { makeTokenResolver } from '../src/locale';
 import type { TokenResolver } from '../src/locale';
 import { MESSAGE, send } from '../src/messages';
 import type { RefreshResult } from '../src/messages';
-import { parseRates } from '../src/rates';
-import { isActiveOn, loadSettings, watchSettings } from '../src/settings';
+import { isCryptoCode } from '../src/crypto';
+import { parseCryptoTable, parseRates } from '../src/rates';
+import { isActiveOn, loadSettings, wantsCrypto, watchSettings } from '../src/settings';
 import type { Settings } from '../src/settings';
 import Tooltip from '../src/tooltip.svelte';
 import { getCardRect, hideTooltipState, moveTooltipState, showTooltipState } from '../src/tooltip-state';
 import tooltipStyles from '../src/tooltip.css?inline';
-import { CACHE_DURATION_MS, STALE_AFTER_MS, STORAGE } from '../src/types';
-import type { DetectedPrice, ExchangeRates } from '../src/types';
+import {
+  CACHE_DURATION_MS, CRYPTO_CACHE_MS, CRYPTO_STALE_AFTER_MS, STALE_AFTER_MS, STORAGE,
+} from '../src/types';
+import type { ConvertedPrice, DetectedPrice, ExchangeRates } from '../src/types';
 
 const E = (msg: string, err: unknown) => console.error(`[PH] ${msg}`, err);
 
@@ -26,19 +29,35 @@ export default defineContentScript({
 
     const hostname = location.hostname;
     let settings = await loadSettings();
+    // A page written in crypto is only read as such once the user asked for it.
+    setCryptoDetection(settings.cryptoEnabled);
 
     // ── Rates ────────────────────────────────────────────────────────────────
     // Fetched on first need, not on page load. Most pages are never hovered,
     // and a storage read per page for rates nobody asked for is a page-load
     // cost paid on every site the user visits.
 
+    /**
+     * Two tables from two hosts on two clocks, merged into the one table every
+     * other module reads. Crypto wins a key collision, which is why what goes
+     * into it is filtered to known assets on the way out of storage.
+     */
+    let fiatRates: ExchangeRates | null = null;
+    let cryptoRates: ExchangeRates | null = null;
     let rates: ExchangeRates | null = null;
     let ratesTimestamp = 0;
+    let cryptoTimestamp = 0;
     let ratesPromise: Promise<void> | null = null;
+
+    function mergeRates(): void {
+      if (!fiatRates) { rates = null; return; }
+      rates = cryptoRates ? { ...fiatRates, ...cryptoRates } : fiatRates;
+    }
 
     /** How long to leave a failed refresh alone before asking again. */
     const RETRY_AFTER_MS = 60_000;
     let lastFailure = 0;
+    let lastCryptoFailure = 0;
 
     /**
      * The fetch itself belongs to the background, and asking for it is all this
@@ -64,13 +83,40 @@ export default defineContentScript({
       }
     }
 
+    /** Same shape as the fiat refresh, and a failure counted separately: one
+     * host being down must not stop the other from being asked. */
+    async function requestCryptoRefresh(): Promise<void> {
+      if (Date.now() - lastCryptoFailure < RETRY_AFTER_MS) return;
+
+      try {
+        const result = await send<RefreshResult>(MESSAGE.REFRESH_CRYPTO);
+        if (!result?.ok) { lastCryptoFailure = Date.now(); return; }
+        await readStoredRates();
+      } catch (err) {
+        lastCryptoFailure = Date.now();
+        E('crypto rate refresh failed', err);
+      }
+    }
+
     async function readStoredRates(): Promise<void> {
-      const stored = await chrome.storage.local.get([STORAGE.RATES, STORAGE.RATES_TS]);
+      const stored = await chrome.storage.local.get([
+        STORAGE.RATES, STORAGE.RATES_TS, STORAGE.CRYPTO_RATES, STORAGE.CRYPTO_TS,
+      ]);
+
       const parsed = parseRates(stored?.[STORAGE.RATES]);
-      if (!parsed) return;
-      rates = parsed;
-      const ts = stored?.[STORAGE.RATES_TS];
-      ratesTimestamp = typeof ts === 'number' ? ts : 0;
+      if (parsed) {
+        fiatRates = parsed;
+        const ts = stored?.[STORAGE.RATES_TS];
+        ratesTimestamp = typeof ts === 'number' ? ts : 0;
+      }
+
+      // Null clears: a revoked permission wipes the stored table, and a tab
+      // open at that moment must stop showing what it can no longer refresh.
+      cryptoRates = parseCryptoTable(stored?.[STORAGE.CRYPTO_RATES]);
+      const cryptoTs = stored?.[STORAGE.CRYPTO_TS];
+      cryptoTimestamp = typeof cryptoTs === 'number' ? cryptoTs : 0;
+
+      mergeRates();
     }
 
     function ensureRates(): Promise<void> {
@@ -79,12 +125,18 @@ export default defineContentScript({
           try {
             await readStoredRates();
             if (!rates || ratesAge() > CACHE_DURATION_MS) await requestRefresh();
+            if (cryptoNeeded()) await requestCryptoRefresh();
           } catch {
             if (!rates) await requestRefresh();
           }
         })().finally(() => { ratesPromise = null; });
       }
       return ratesPromise;
+    }
+
+    /** Nothing is asked of the crypto host for a list that shows no crypto row. */
+    function cryptoNeeded(): boolean {
+      return wantsCrypto(settings) && (!cryptoRates || cryptoAge() > CRYPTO_CACHE_MS);
     }
 
     /**
@@ -94,6 +146,18 @@ export default defineContentScript({
      */
     const ratesAge = (): number => Math.abs(Date.now() - ratesTimestamp);
     const ratesAreStale = (): boolean => ratesAge() > STALE_AFTER_MS;
+    const cryptoAge = (): number => Math.abs(Date.now() - cryptoTimestamp);
+
+    /**
+     * A crypto row an hour old is not the same claim as a euro row an hour old,
+     * so the warning is decided per row rather than once for the tooltip. The
+     * fiat table being fresh says nothing about the other host.
+     */
+    function anyStale(conversions: readonly ConvertedPrice[]): boolean {
+      if (ratesAreStale()) return true;
+      return conversions.some((c) => isCryptoCode(c.currency.code)) &&
+             cryptoAge() > CRYPTO_STALE_AFTER_MS;
+    }
 
     // ── Currency resolution from the page ────────────────────────────────────
 
@@ -284,7 +348,7 @@ export default defineContentScript({
     function show(price: DetectedPrice, rect: DOMRect): void {
       // A tab left open for a week converted at week-old rates: the staleness
       // check only ever ran when there were no rates at all.
-      if (rates && ratesAge() > CACHE_DURATION_MS) void ensureRates();
+      if (rates && (ratesAge() > CACHE_DURATION_MS || cryptoNeeded())) void ensureRates();
 
       if (!rates) {
         pending = { price, rect };
@@ -307,7 +371,7 @@ export default defineContentScript({
         sources: [price],
         allConversions: [conversions],
         rounding: settings.rounding,
-        stale: ratesAreStale(),
+        stale: anyStale(conversions),
         x: rect.left + rect.width / 2,
         y: rect.top,
         yBottom: rect.bottom,
@@ -557,6 +621,7 @@ export default defineContentScript({
       const wasActive = isActiveOn(settings, hostname);
       settings = next;
       refreshResolver();
+      setCryptoDetection(settings.cryptoEnabled);
 
       const active = isActiveOn(settings, hostname);
       if (!active) { stopListening(); return; }
@@ -578,7 +643,8 @@ export default defineContentScript({
         const next = parseRates(changes[STORAGE.RATES].newValue);
         if (next) {
           const first = !rates;
-          rates = next;
+          fiatRates = next;
+          mergeRates();
           lastFailure = 0;
           // Inline mode gives up when it runs with no rates, and a first fetch
           // that finished after the page did left the page bare for good.
@@ -588,6 +654,18 @@ export default defineContentScript({
       if (changes[STORAGE.RATES_TS]) {
         const ts = changes[STORAGE.RATES_TS].newValue;
         if (typeof ts === 'number') ratesTimestamp = ts;
+      }
+      if (changes[STORAGE.CRYPTO_RATES]) {
+        // Undefined here is a removal, which is what revoking the permission
+        // does. Badges priced against a table we no longer hold come off.
+        cryptoRates = parseCryptoTable(changes[STORAGE.CRYPTO_RATES].newValue);
+        mergeRates();
+        lastCryptoFailure = 0;
+        annotator?.refresh();
+      }
+      if (changes[STORAGE.CRYPTO_TS]) {
+        const ts = changes[STORAGE.CRYPTO_TS].newValue;
+        cryptoTimestamp = typeof ts === 'number' ? ts : 0;
       }
     };
     chrome.storage.onChanged.addListener(onRatesChanged);

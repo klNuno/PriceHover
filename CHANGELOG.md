@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.1.0
+
+### Sub-cent prices were being rounded into wrong ones
+
+A tenth of a yen printed as `€0.00061`, and a whole yen as `€0.01`, which is
+sixty-four percent too much. Only an amount that rounded to *exactly* zero was
+rescued; everything just above that kept a single significant digit, and the
+`integer` mode printed `€0`.
+
+- Two significant digits are now kept below one unit whatever the rounding mode asked for, one for `integer`, which still keeps whole numbers whole wherever a whole number says something. `1 JPY` is `€0.0061`, not `€0.01`.
+- No mode prints zero for a price that is worth something, in any currency.
+- Past eight decimals (one satoshi's worth of euro) an amount is stated as a bound, `<€0.00000001`, rather than padded with zeroes.
+- Per-unit and prorated prices below one unit are detected: `$0.0075`, `€0.000015`. Three decimals used to be the ceiling, so those matched nothing at all. An amount with an integer part keeps that ceiling, so `€1234.5678` is still not a price.
+
+### Crypto, off by default
+
+24 assets: BTC, ETH, XMR, USDT, USDC, XRP, BNB, SOL, DOGE, ADA, TRX, AVAX,
+LINK, DOT, LTC, BCH, XLM, SHIB, UNI, ATOM, ETC, NEAR, APT, FIL.
+
+- Off until you turn it on in Settings → **Currencies**. Your browser asks before granting access to `api.coingecko.com`, and turning the switch back off hands the permission back and deletes the cached rates. Revoking it from the browser's own panel does the same.
+- Crypto rates refresh at most once an hour, and only while a crypto row would actually be shown. A profile without crypto makes exactly the requests it made before: one host, once a day.
+- The tooltip's staleness warning is per source. A fresh euro rate no longer vouches for an hours-old bitcoin one.
+- Crypto formatting never goes through `Intl` currency formatting, which prints an unknown three-letter ticker with two decimals (`BTC 0.00`) and throws outright on a four-letter one (`DOGE`).
+- Prices written in crypto are read on the page too, for BTC, ETH, XMR, USDT, USDC, DOGE, XRP, LTC, BCH and the `₿` and `Ξ` glyphs. The other fourteen assets convert but are not tokens: `ATOM`, `LINK`, `NEAR`, `ETC` and friends are ordinary words in an all-caps heading, and `SOL` is the Peruvian sol.
+- Crypto is a target, not a base currency.
+
 ## 2.0.0
 
 The major bump is for the reading change, not the feature list: a `$` price on

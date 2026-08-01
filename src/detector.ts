@@ -1,4 +1,5 @@
 import type { DetectedPrice } from './types';
+import { isCryptoCode } from './crypto';
 import { CURRENCY_BY_CODE } from './currencies';
 import type { TokenResolver } from './locale';
 
@@ -66,7 +67,33 @@ const SYMBOLS: SymbolSpec[] = [
   ...[...CURRENCY_BY_CODE.keys()].map((code) => both(code, code)),
 ];
 
-export const SYMBOL_BY_TOKEN = new Map(SYMBOLS.map((s) => [s.token, s]));
+/**
+ * Crypto tokens, and deliberately not one per convertible asset.
+ *
+ * Twenty-four assets can be converted *to*; nine tickers plus two glyphs are
+ * believed when they appear *on a page*, because the two lists have completely
+ * different costs. A new target costs nothing: it rides the same request. A new
+ * token costs a class of false positive, and this file has paid that bill
+ * before with `error code 500 KD` and `try 100 times`.
+ *
+ * Left out on purpose:
+ * - `ATOM`, `LINK`, `NEAR`, `TON`, `DOT`, `UNI`, `APT`, `FIL`, `ARB`, `OP`,
+ *   `ETC`, `ADA`: ordinary words and abbreviations in an all-caps heading.
+ * - `SOL`: it is the name of the Peruvian sol, which this extension already
+ *   converts. "SOL 30" on a Peruvian page is soles, and reading it as Solana
+ *   would be wrong rather than merely noisy.
+ * - `Ł`: Polish orthography.
+ * - `sats` as a suffix: "1000 sats" is a price and also a username.
+ */
+const CRYPTO_SYMBOLS: SymbolSpec[] = [
+  both('₿', 'BTC'), both('Ξ', 'ETH'),
+  ...['BTC', 'ETH', 'XMR', 'USDT', 'USDC', 'DOGE', 'XRP', 'LTC', 'BCH']
+    .map((code) => both(code, code)),
+];
+
+export const SYMBOL_BY_TOKEN = new Map(
+  [...SYMBOLS, ...CRYPTO_SYMBOLS].map((s) => [s.token, s])
+);
 
 /**
  * Space characters allowed beside or inside an amount. Newlines are excluded on
@@ -96,7 +123,28 @@ const AMOUNT =
   '(?:' +
   `\\d{1,2}(?:,\\d{2})+,\\d{3}(?:\\.\\d{1,2})?` +
   `|\\d{1,3}(?:${GROUP_SEP}\\d{3}){1,5}(?:[,.]\\d{1,2})?` +
+  `|0[,.]\\d{1,6}` +
   `|\\d{1,12}(?:[,.]\\d{1,3})?` +
+  ')';
+
+/**
+ * The fourth shape is a price below one unit, and only that: a leading zero,
+ * then up to six decimals. `$0.0075 per 1K tokens` and `€0.000015 per unit` are
+ * how prorated and per-unit prices are printed, and three decimals matched none
+ * of them, so those prices were invisible rather than wrong.
+ *
+ * The integer branch keeps its three, because a fourth decimal there is what
+ * `€1234.5678` is: a rate, a coordinate, a measurement. Both of those already
+ * had a rejection test and both still hold.
+ *
+ * Crypto gets eight, a bitcoin's own minor unit, in a shape of its own so that
+ * widening it can never touch a fiat match. The Indian grouping branch is left
+ * out: nobody prints lakh of ether.
+ */
+const CRYPTO_AMOUNT =
+  '(?:' +
+  `\\d{1,3}(?:${GROUP_SEP}\\d{3}){1,5}(?:[,.]\\d{1,2})?` +
+  `|\\d{1,12}(?:[,.]\\d{1,8})?` +
   ')';
 
 function escapeToken(token: string): string {
@@ -153,6 +201,54 @@ const PRICE_SOURCE =
 const PRICE_REGEX = new RegExp(PRICE_SOURCE, 'u');
 const GLOBAL_PRICE_REGEX = new RegExp(PRICE_SOURCE, 'gu');
 
+/**
+ * Group layout continues where the fiat source stopped:
+ *   9=glyph, 10=amount | 11=code, 12=amount | 13=amount, 14=token
+ *
+ * A glyph may touch its digits (`₿0.05`); a ticker may not (`BTC 0.05`), for
+ * the same reason `CRC32` and `PHP7` are not prices.
+ */
+function cryptoSource(): string {
+  const glyphs = alternation(CRYPTO_SYMBOLS.filter((s) => !isCode(s)));
+  const codes = alternation(CRYPTO_SYMBOLS.filter(isCode));
+  const every = alternation(CRYPTO_SYMBOLS);
+
+  return (
+    `(?:(?<![\\p{L}\\d])(${glyphs})${SPACE}?(${CRYPTO_AMOUNT})` +
+    `|(?<![\\p{L}\\d])(${codes})${SPACE}(${CRYPTO_AMOUNT})` +
+    `|(?<![\\p{L}\\d.,])(${CRYPTO_AMOUNT})${SPACE}?(${every}))` +
+    `(?![\\p{L}\\d])(?![.,]\\d)`
+  );
+}
+
+/**
+ * Two compiled sources rather than one that always carries crypto: a profile
+ * with the feature off runs the regex it has always run, over the same pages,
+ * at the same cost. The crypto pair is built the first time it is needed and
+ * never for anyone else.
+ */
+let cryptoRegexes: { one: RegExp; all: RegExp } | null = null;
+let cryptoDetection = false;
+
+/**
+ * Called by the content script from the settings it already reads. Detection is
+ * a page-facing behaviour, so it follows the switch rather than the permission:
+ * a user who turned crypto off keeps a page of `0.05 BTC` unannotated even
+ * while the browser still remembers the grant.
+ */
+export function setCryptoDetection(enabled: boolean): void {
+  cryptoDetection = enabled;
+}
+
+function priceRegexes(): { one: RegExp; all: RegExp } {
+  if (!cryptoDetection) return { one: PRICE_REGEX, all: GLOBAL_PRICE_REGEX };
+  if (!cryptoRegexes) {
+    const source = `(?:${PRICE_SOURCE})|(?:${cryptoSource()})`;
+    cryptoRegexes = { one: new RegExp(source, 'u'), all: new RegExp(source, 'gu') };
+  }
+  return cryptoRegexes;
+}
+
 const DIGIT_REGEX = /\d/;
 
 /**
@@ -163,6 +259,14 @@ const DIGIT_REGEX = /\d/;
  */
 const AMBIGUOUS_CODES = new Set(['PHP', 'TRY', 'CRC', 'COP']);
 const PRICE_SHAPED = new RegExp(`(?:[,.]\\d\\d|${GROUP_SEP}\\d{3})`, 'u');
+
+/**
+ * What a ticker must not sit next to: a bare run of four digits or more.
+ * `ETH 8092` is a Zurich postal code, `XRP 2024` a year, `BTC 10000` a headline
+ * number as often as an amount. Anything carrying a separator, and anything
+ * short, is left alone: `1,000 USDT`, `BCH 1,299.50`, `500 USDC`, `0.05 BTC`.
+ */
+const CRYPTO_BARE_INTEGER = /^\d{4,}$/u;
 
 /** Tokens one character away from prose, where a lone digit means noise. */
 const NEEDS_TWO_DIGITS = new Set(['R', 'S/']);
@@ -190,6 +294,14 @@ const RANGE_BETWEEN = new RegExp(`^${RANGE_DASH}$`, 'u');
 const THREE_DECIMAL_CURRENCIES = new Set(['KWD', 'BHD', 'OMR', 'JOD', 'TND']);
 
 /**
+ * Same exception, wider reason: `1.005 BTC` is one and a bit, never a thousand
+ * and five. It belongs to the dot alone, as it does for the dinar, since a page
+ * writing `1,005 USDT` in US notation does mean a thousand.
+ */
+const isManyDecimal = (code: string): boolean =>
+  THREE_DECIMAL_CURRENCIES.has(code) || isCryptoCode(code);
+
+/**
  * What a thousands group has to look like on its left: one to three digits,
  * never a leading zero. `0.001` and `0,001` are thousandths, and reading them
  * as grouping turned a fractional price into 1.
@@ -209,7 +321,7 @@ export function normalizeAmount(raw: string, code: string): number {
   // way of printing a price and not a grouped 1250500.
   if (lastComma !== -1 && lastDot !== -1) {
     const decimalIndex = Math.max(lastComma, lastDot);
-    const minorUnit = s[decimalIndex] === '.' && THREE_DECIMAL_CURRENCIES.has(code);
+    const minorUnit = s[decimalIndex] === '.' && isManyDecimal(code);
     if (s.length - decimalIndex - 1 === 3 && !minorUnit) {
       return parseFloat(s.replace(/[,.]/g, ''));
     }
@@ -224,7 +336,7 @@ export function normalizeAmount(raw: string, code: string): number {
   const separatorCount = s.split(separator).length - 1;
   const separatorIndex = Math.max(lastComma, lastDot);
   const digitsAfter = s.length - separatorIndex - 1;
-  const minorUnit = separator === '.' && THREE_DECIMAL_CURRENCIES.has(code);
+  const minorUnit = separator === '.' && isManyDecimal(code);
 
   if (separatorCount > 1) return parseFloat(s.split(separator).join(''));
   if (digitsAfter === 3 && !minorUnit && LEADING_GROUP.test(s.slice(0, separatorIndex))) {
@@ -267,6 +379,18 @@ function parseMatch(
     token = match[8];
     rawAmount = match[7];
     side = 'after';
+  } else if (match[9]) {
+    token = match[9];
+    rawAmount = match[10];
+    side = 'before';
+  } else if (match[11]) {
+    token = match[11];
+    rawAmount = match[12];
+    side = 'before';
+  } else if (match[14]) {
+    token = match[14];
+    rawAmount = match[13];
+    side = 'after';
   } else {
     return null;
   }
@@ -286,6 +410,11 @@ function parseMatch(
   // money: "Requires PHP 8", "TRY 100 TIMES", "COP 21". A real price in one of
   // them is printed like a price, grouped or with a full minor unit.
   if (AMBIGUOUS_CODES.has(spec.token) && !PRICE_SHAPED.test(rawAmount)) return null;
+
+  // A ticker next to a long round integer is an address, a postal code or an
+  // identifier far more often than a price: "ETH 8092" is Zurich. A crypto
+  // amount that is really a price either carries a separator or is small.
+  if (isCryptoCode(spec.code) && isCode(spec) && CRYPTO_BARE_INTEGER.test(rawAmount)) return null;
 
   // One digit behind a token this short is an identifier: "R2-D2", "Model S/ 3".
   // A real R5 loses out, which is rarer than the noise the rule keeps out.
@@ -441,7 +570,7 @@ function trySemanticDetection(element: Element): DetectedPrice | null {
 
 function tryRegexDetection(text: string, resolve?: TokenResolver): DetectedPrice | null {
   if (!DIGIT_REGEX.test(text)) return null;
-  const match = PRICE_REGEX.exec(text);
+  const match = priceRegexes().one.exec(text);
   if (!match) return null;
   const parsed = parseMatch(match, match.index, undefined, resolve);
   if (!parsed) return null;
@@ -461,7 +590,7 @@ function tryRegexDetectionAll(
   const raw: RawMatch[] = [];
   // `matchAll` keeps no cursor on the shared regex, so nothing here can be left
   // in a bad state for the next call.
-  for (const match of text.matchAll(GLOBAL_PRICE_REGEX)) {
+  for (const match of text.matchAll(priceRegexes().all)) {
     const parsed = parseMatch(match, match.index ?? 0, textSource, resolve);
     if (parsed) raw.push(parsed);
   }

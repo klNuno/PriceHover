@@ -6,6 +6,13 @@
 export const MESSAGE = {
   OPEN_OPTIONS: 'openOptions',
   REFRESH_RATES: 'refreshRates',
+  /**
+   * Separate from `REFRESH_RATES` because the two can fail independently: the
+   * crypto host may be unreachable, or its permission revoked, while the fiat
+   * one answers fine. One result for both would report either a success that
+   * did not happen or a failure that did not either.
+   */
+  REFRESH_CRYPTO: 'refreshCryptoRates',
 } as const;
 
 export type MessageType = (typeof MESSAGE)[keyof typeof MESSAGE];

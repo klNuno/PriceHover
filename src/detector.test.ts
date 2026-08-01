@@ -1,5 +1,7 @@
-import { describe, expect, test } from 'bun:test';
-import { detectAllFromText, detectPriceFromText, normalizeAmount } from './detector';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import {
+  detectAllFromText, detectPriceFromText, normalizeAmount, setCryptoDetection,
+} from './detector';
 import { makeTokenResolver } from './locale';
 
 /** Compact helper: the first price found in `text`, or null. */
@@ -200,6 +202,87 @@ describe('page context resolves ambiguous tokens', () => {
 
   test('no resolver leaves the historical default', () => {
     expect(detectAllFromText('$49.99')[0].currencyCode).toBe('USD');
+  });
+});
+
+describe('crypto detection is off until it is asked for', () => {
+  test('a crypto amount is not a price by default', () => {
+    expect(detect('0.05 BTC')).toBeNull();
+    expect(detect('Ξ1.2')).toBeNull();
+  });
+});
+
+describe('crypto detection, once enabled', () => {
+  beforeAll(() => setCryptoDetection(true));
+  afterAll(() => setCryptoDetection(false));
+
+  const cases: [string, number, string][] = [
+    ['0.05 BTC', 0.05, 'BTC'],
+    ['BTC 0.05', 0.05, 'BTC'],
+    ['₿0.05', 0.05, 'BTC'],
+    ['Ξ1.2', 1.2, 'ETH'],
+    ['2 ETH', 2, 'ETH'],
+    ['XMR 0.25', 0.25, 'XMR'],
+    ['500 USDC', 500, 'USDC'],
+    ['1,000 USDT', 1000, 'USDT'],
+    ['BCH 1,299.50', 1299.5, 'BCH'],
+    // Eight decimals is a whole satoshi, and the point of a separate shape.
+    ['0.00048 BTC', 0.00048, 'BTC'],
+    ['0.00000001 BTC', 0.00000001, 'BTC'],
+  ];
+
+  for (const [text, amount, code] of cases) {
+    test(text, () => expect(detect(text)).toEqual({ amount, code }));
+  }
+
+  // Every new token earns its rejection test. These are the ways each one
+  // shows up on a page while meaning something else entirely.
+  const rejected = [
+    'ETH 8092 Zurich',   // a postal code
+    'BTC 10000',         // a headline number, not an amount
+    'XRP 2024',          // a year
+    'ETH2 staking',      // a code glued to digits is never a price
+    '0.123456789 BTC',   // past eight decimals, nothing rather than a truncation
+    'SOL 30',            // the Peruvian sol, which this extension already converts
+    'LINK 25.50',        // deliberately not a token
+    'ATOM 12.00',
+    'NEAR 5.00',
+    'ETC 1,299',
+    'DOT 4.50',
+    'UNI 7.25',
+  ];
+
+  for (const text of rejected) {
+    test(`rejects ${text}`, () => expect(detect(text)).toBeNull());
+  }
+
+  test('a dot before three digits is decimals, never thousands', () => {
+    // `1.005 BTC` is one and a bit. The grouping heuristic read it as 1005.
+    expect(detect('1.005 BTC')).toEqual({ amount: 1.005, code: 'BTC' });
+  });
+
+  test('fiat keeps its own three-decimal ceiling', () => {
+    expect(detect('€1234.5678')).toBeNull();
+    expect(detect('1.2345 USD')).toBeNull();
+  });
+});
+
+describe('sub-unit prices below the third decimal', () => {
+  // Per-unit and prorated pricing: an API tariff, a price per litre. Three
+  // decimals matched none of these, so they were invisible rather than wrong.
+  const cases: [string, number, string][] = [
+    ['$0.0075', 0.0075, 'USD'],
+    ['€0.000015', 0.000015, 'EUR'],
+    ['0.0075 USD', 0.0075, 'USD'],
+    ['€0,000015', 0.000015, 'EUR'],
+  ];
+
+  for (const [text, amount, code] of cases) {
+    test(text, () => expect(detect(text)).toEqual({ amount, code }));
+  }
+
+  test('an integer part keeps the old ceiling', () => {
+    expect(detect('$1.00075')).toBeNull();
   });
 });
 

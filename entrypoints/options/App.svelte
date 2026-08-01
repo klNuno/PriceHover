@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { CURRENCIES, CURRENCY_BY_CODE, flagToCountryCode } from '../../src/currencies';
+  import { CRYPTO_ASSETS } from '../../src/crypto';
+  import { ASSET_BY_CODE, CURRENCIES, CURRENCY_BY_CODE, flagToCountryCode } from '../../src/currencies';
   import { flagImage } from '../../src/flags';
+  import { dropCryptoAccess, hasCryptoAccess, requestCryptoAccess, watchCryptoRevoked } from '../../src/permissions';
   import { formatCurrencyAmount } from '../../src/formatter';
   import { t, uiLocale } from '../../src/i18n';
   import { MESSAGE, send } from '../../src/messages';
@@ -23,6 +25,8 @@
   let showWelcome = $state(false);
   let confirmingReset = $state(false);
   let loaded = $state(false);
+  /** What the browser says, not what the settings key remembers. */
+  let cryptoGranted = $state(false);
   /** False until a read actually succeeded: writing before that persists defaults over real data. */
   let canSave = $state(false);
 
@@ -75,9 +79,15 @@
     } catch (e) {
       console.error('[PH] rates timestamp read failed', e);
     }
+
+    cryptoGranted = await hasCryptoAccess();
   });
 
-  onDestroy(() => { unwatch?.(); unwatchRates?.(); });
+  onDestroy(() => { unwatch?.(); unwatchRates?.(); unwatchCrypto?.(); });
+
+  // A permission taken away from the browser's own panel never passes through
+  // this page, and the switch would sit there saying "on".
+  const unwatchCrypto = watchCryptoRevoked(() => { cryptoGranted = false; });
 
   function watchRatesTimestamp(onChange: (timestamp: number) => void): () => void {
     const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, areaName) => {
@@ -121,6 +131,34 @@
 
   function toggle(key: 'enabled' | 'inlineMode' | 'usePageContext', box: HTMLInputElement): void {
     void update({ [key]: box.checked }, () => { box.checked = settings[key]; });
+  }
+
+  /**
+   * The permission request is the first thing this function does, before any
+   * await. A settings read first would spend the user gesture, and Firefox
+   * rejects a permission request made outside one without ever prompting.
+   *
+   * Turning it off gives the permission back rather than merely forgetting it:
+   * a granted host that nothing uses is still a granted host.
+   */
+  function toggleCrypto(box: HTMLInputElement): void {
+    if (!box.checked) {
+      void update({ cryptoEnabled: false }, () => { box.checked = settings.cryptoEnabled; })
+        .then(() => dropCryptoAccess())
+        .then(() => { cryptoGranted = false; });
+      return;
+    }
+
+    void requestCryptoAccess().then(async (granted) => {
+      cryptoGranted = granted;
+      if (!granted) {
+        box.checked = false;
+        error = t('cryptoDenied');
+        return;
+      }
+      error = '';
+      await update({ cryptoEnabled: true }, () => { box.checked = false; });
+    });
   }
 
   function addTarget(code: string): void {
@@ -203,14 +241,19 @@
 
   const targetCurrencies = $derived(
     settings.targetCurrencies
-      .map((code) => CURRENCY_BY_CODE.get(code))
+      .map((code) => ASSET_BY_CODE.get(code))
       .filter((c): c is NonNullable<typeof c> => c !== undefined)
   );
 
   const availableCurrencies = $derived.by(() => {
     const chosen = new Set([settings.baseCurrency, ...settings.targetCurrencies]);
     const filter = currencyFilter.trim().toLowerCase();
-    return CURRENCIES.filter(
+    // Crypto joins the picker only once the host permission is actually held.
+    // Offering a row the extension cannot price is offering nothing.
+    const pool = settings.cryptoEnabled && cryptoGranted
+      ? [...CURRENCIES, ...CRYPTO_ASSETS]
+      : CURRENCIES;
+    return pool.filter(
       (c) =>
         !chosen.has(c.code) &&
         (!filter || c.code.toLowerCase().includes(filter) || c.name.toLowerCase().includes(filter))
@@ -296,6 +339,8 @@
             <li>
               {#if flagImage(flagToCountryCode(currency.flag))}
                 <img class="flag" src={flagImage(flagToCountryCode(currency.flag))} alt="" />
+              {:else}
+                <span class="flag-fb">{currency.flag}</span>
               {/if}
               <span class="code">{currency.code}</span>
               <span class="name">{currency.name}</span>
@@ -335,6 +380,8 @@
               <button type="button" onclick={() => addTarget(currency.code)}>
                 {#if flagImage(flagToCountryCode(currency.flag))}
                   <img class="flag" src={flagImage(flagToCountryCode(currency.flag))} alt="" />
+                {:else}
+                  <span class="flag-fb">{currency.flag}</span>
                 {/if}
                 <span class="code">{currency.code}</span>
                 <span class="name">{currency.name}</span>
@@ -343,6 +390,18 @@
             </li>
           {/each}
         </ul>
+      </div>
+
+      <div class="field">
+        <label class="switch">
+          <input
+            type="checkbox"
+            checked={settings.cryptoEnabled && cryptoGranted}
+            onchange={(e) => toggleCrypto(e.currentTarget)}
+          />
+          <span>{t('cryptoEnabled')}</span>
+        </label>
+        <p class="help">{t('cryptoEnabledHelp')}</p>
       </div>
     </section>
 
@@ -559,6 +618,11 @@
   select:focus, input:focus { outline: 2px solid var(--focus); outline-offset: -1px; }
 
   .flag { width: 20px; height: 15px; object-fit: cover; border-radius: 2px; flex-shrink: 0; }
+  /* Same box as a flag, so a crypto row lines up with the fiat ones above it. */
+  .flag-fb {
+    width: 20px; flex-shrink: 0; text-align: center;
+    font-size: 13px; line-height: 15px; color: var(--fg2);
+  }
 
   ul { list-style: none; }
 

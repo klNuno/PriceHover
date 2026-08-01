@@ -30,6 +30,8 @@ request a day for the rates.
 - **Inline mode.** Write your currency beside every price instead of waiting for a hover. It only ever appends.
 - **Two switches.** A master one and a per-site pause, both in the popup.
 - **Rounding.** `≈€1,235` where `€1,234.56` would pretend to a precision a conversion does not have.
+- **Sub-cent prices stay prices.** A yen is `€0.0061`, not `€0.01`, and never `€0`. Per-unit and prorated prices (`$0.0075`) are read too.
+- **Crypto, if you want it.** 24 assets including BTC, ETH, XMR, USDT, USDC and DOGE. Off by default, one extra host, granted by you and given back when you switch it off.
 - **44 currencies, eight languages.** Flags are bundled, nothing is fetched from a third party.
 
 > [!NOTE]
@@ -90,6 +92,10 @@ question: today's exchange rates. That request carries nothing about you or the
 page you are on. Prices are detected on your machine, flags are bundled in the
 extension, and there is no analytics, no telemetry and no identifier. Three
 permissions: `storage`, `activeTab` and access to `open.er-api.com`.
+
+Turning on crypto conversion adds a second host, `api.coingecko.com`, and
+nothing else. It is off by default, your browser asks before granting it, and
+switching it back off hands the permission back.
 
 Full details in the [privacy policy](PRIVACY.md).
 

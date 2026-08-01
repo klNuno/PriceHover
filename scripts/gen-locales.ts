@@ -80,6 +80,37 @@ const MESSAGES: Record<string, Entry> = {
     pt_BR: 'Configurações', it: 'Impostazioni', ja: '設定', zh_CN: '设置',
   },
 
+  // ── Crypto ───────────────────────────────────────────────────────────────
+  // The help text names the second host on purpose. It is the one thing a user
+  // is agreeing to, and the browser's own prompt says it in permission terms
+  // rather than in plain language.
+  cryptoEnabled: {
+    en: 'Bitcoin and other crypto', fr: 'Bitcoin et autres cryptos',
+    es: 'Bitcoin y otras criptos', de: 'Bitcoin und andere Kryptos',
+    pt_BR: 'Bitcoin e outras criptos', it: 'Bitcoin e altre cripto',
+    ja: 'ビットコインなどの暗号資産', zh_CN: '比特币及其他加密货币',
+  },
+  cryptoEnabledHelp: {
+    en: 'Adds 24 crypto assets. Crypto rates come from api.coingecko.com, a second host contacted only while this is on, about once an hour.',
+    fr: 'Ajoute 24 cryptos. Leurs taux viennent de api.coingecko.com, un second hôte contacté uniquement tant que ceci est activé, environ une fois par heure.',
+    es: 'Añade 24 criptomonedas. Sus tasas vienen de api.coingecko.com, un segundo host contactado solo mientras esto está activado, alrededor de una vez por hora.',
+    de: 'Fügt 24 Kryptowerte hinzu. Deren Kurse stammen von api.coingecko.com, einem zweiten Host, der nur bei aktivierter Option kontaktiert wird, etwa einmal pro Stunde.',
+    pt_BR: 'Adiciona 24 criptoativos. As taxas vêm de api.coingecko.com, um segundo host contatado apenas enquanto isto estiver ativo, cerca de uma vez por hora.',
+    it: 'Aggiunge 24 cripto. I tassi arrivano da api.coingecko.com, un secondo host contattato solo mentre questa opzione è attiva, circa una volta all’ora.',
+    ja: '24種類の暗号資産を追加します。レートは api.coingecko.com から取得し、この設定が有効な間だけ、1時間に1回程度接続します。',
+    zh_CN: '添加 24 种加密资产。汇率来自 api.coingecko.com，仅在此项开启时约每小时连接一次。',
+  },
+  cryptoDenied: {
+    en: 'Crypto stays off without access to api.coingecko.com.',
+    fr: 'La crypto reste désactivée sans accès à api.coingecko.com.',
+    es: 'Las criptos siguen desactivadas sin acceso a api.coingecko.com.',
+    de: 'Krypto bleibt ohne Zugriff auf api.coingecko.com deaktiviert.',
+    pt_BR: 'As criptos continuam desativadas sem acesso a api.coingecko.com.',
+    it: 'Le cripto restano disattivate senza accesso a api.coingecko.com.',
+    ja: 'api.coingecko.com へのアクセスがない場合、暗号資産は無効のままです。',
+    zh_CN: '未获得 api.coingecko.com 的访问权限时，加密货币保持关闭。',
+  },
+
   // ── Rates ────────────────────────────────────────────────────────────────
   ratesUpdated: {
     en: 'Rates $1', fr: 'Taux $1', es: 'Tasas $1', de: 'Kurse $1',

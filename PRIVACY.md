@@ -4,7 +4,7 @@ title: Privacy Policy
 ---
 # Privacy policy
 
-**Last updated: 2026-07-26. Applies to version 2.0.0.**
+**Last updated: 2026-08-01. Applies to version 2.1.0.**
 
 ## The short version
 
@@ -12,6 +12,11 @@ PriceHover contacts exactly one host, `open.er-api.com`, and asks it one
 question: what are today's exchange rates. That request says nothing about you
 or about the page you are on. Everything else happens on your machine:
 detecting prices, converting them, drawing the tooltip.
+
+There is one exception, and only if you ask for it: turning on crypto
+conversion adds a second host, `api.coingecko.com`. It is off by default, your
+browser asks before granting it, and nothing is sent there either. See
+[Crypto](#crypto-if-you-turn-it-on) below.
 
 There is no analytics, no telemetry, no error reporting, no account, and no
 identifier of any kind.
@@ -39,7 +44,8 @@ you chose to pause, and nothing else is ever written to storage.
 | Access to page content on all sites (`content_scripts: <all_urls>`) | A price can be on any page, so the detector has to run on any page. It reads text and, in inline mode, appends a label next to a price. It never sends page data anywhere. Your browser may describe this as "read and change all your data on all websites", which is the standard wording for any content script. |
 | `storage` | Keep your settings between sessions. |
 | `activeTab` | Show the current site's name in the popup so the pause switch can name it. Granted for one tab, only at the moment you click the extension icon, and never at rest. |
-| `open.er-api.com` host access | Fetch exchange rates. The only network destination in the extension. |
+| `open.er-api.com` host access | Fetch exchange rates. The only network destination the extension has by default. |
+| `api.coingecko.com` host access | **Optional, not granted at install.** Fetch crypto rates, and only while you have crypto conversion switched on. Turning the switch off gives the permission back. |
 
 The extension deliberately does **not** ask for `tabs`, `alarms`,
 `clipboardWrite`, `webRequest`, `history`, or `cookies`.
@@ -62,6 +68,28 @@ Country flags are bundled inside the extension as data URIs, so no image, font
 or script is ever loaded from a third party while you browse. This is
 deliberate: an image request made from a page would hand its host the address of
 the page you were reading.
+
+## Crypto, if you turn it on
+
+Crypto conversion is off when you install the extension, and turning it on is
+the only thing that changes any of the above.
+
+- Your browser prompts you before it grants access to `api.coingecko.com`. If
+  you decline, the switch stays off.
+- The request is `GET https://api.coingecko.com/api/v3/simple/price` with a
+  fixed list of assets. Like the fiat one, it is made by the background worker,
+  carries no page data and no identifier, and it names no page you have visited.
+- At most once an hour, and only while a crypto row would actually be shown. A
+  session in which nothing is converted makes no crypto request at all.
+- Turning the switch back off removes the permission and deletes the cached
+  crypto rates. Revoking it from your browser's own permissions panel does the
+  same thing.
+
+What that host learns is what any host learns from being asked a question: that
+some browser asked, and when. It is told nothing about you, and nothing about
+what you were reading. See
+[CoinGecko's privacy policy](https://www.coingecko.com/en/privacy) for what they
+log at their end.
 
 ## Things the extension does on the page
 
