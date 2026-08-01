@@ -1,5 +1,9 @@
+import { CRYPTO_BY_CODE, type CryptoAsset } from './crypto';
 import { uiLocale } from './i18n';
 import type { Rounding } from './settings';
+
+/** `Intl` puts one of these between a currency code and its number; so do we. */
+const NBSP = ' ';
 
 const FORMATTERS = new Map<string, Intl.NumberFormat>();
 
@@ -48,37 +52,60 @@ function smartDecimals(amount: number): number {
   return 2;
 }
 
-function decimalsFor(amount: number, code: string, rounding: Rounding): number | null {
-  // A price that is worth something must never print as zero. One VND is four
-  // hundredths of a cent, and every rounding mode said "$0.00", which is not an
-  // approximation of the answer but the opposite of it.
-  const sunk = sunkDecimals(amount, code);
-  if (sunk !== null) return sunk;
+/**
+ * Significant digits kept below one unit, whatever the rounding mode asked for.
+ *
+ * Two, because one is not an answer: a tenth of a yen is €0.00061, and rounding
+ * it to the euro's own minor unit gives €0.01, sixteen times too much. The mode
+ * chooses how coarse a *readable* price may be; it does not get to choose a
+ * wrong one.
+ */
+const SIGNIFICANT_DIGITS = 2;
 
-  if (rounding === 'integer') return 0;
-  if (rounding === 'smart') return Math.min(naturalDecimals(code), smartDecimals(amount));
-  return null;
+/**
+ * The floor under which no amount is worth more digits. One satoshi is about
+ * €0.00000014, so eight places still price the smallest unit anyone transacts
+ * in, and anything below that is stated as a bound rather than padded with
+ * zeroes nobody reads.
+ */
+const MAX_DECIMALS = 8;
+const SMALLEST = 10 ** -MAX_DECIMALS;
+
+/** Places needed for `digits` significant digits of a magnitude below one. */
+function significantDecimals(magnitude: number, digits: number): number {
+  return Math.max(0, Math.ceil(-Math.log10(magnitude)) - 1 + digits);
+}
+
+function decimalsFor(amount: number, natural: number, rounding: Rounding): number {
+  const magnitude = Math.abs(amount);
+  if (magnitude === 0) return natural;
+
+  // `integer` keeps its promise while a whole number still says something. It
+  // breaks it only where keeping it would print zero, which is not a rounder
+  // version of the price but the opposite of it.
+  if (rounding === 'integer') {
+    return Math.round(magnitude) === 0
+      ? Math.min(MAX_DECIMALS, significantDecimals(magnitude, 1))
+      : 0;
+  }
+
+  const asked = rounding === 'smart' ? Math.min(natural, smartDecimals(amount)) : natural;
+  const floor = magnitude < 1 ? significantDecimals(magnitude, SIGNIFICANT_DIGITS) : 0;
+  return Math.min(MAX_DECIMALS, Math.max(asked, floor));
 }
 
 /**
- * How many places it takes to show a non-zero amount that the currency's own
- * minor unit rounds away, or null when the minor unit already shows it.
+ * True when a rounding mode actually gave up digits, which is what the tilde
+ * announces. `exact` at the currency's own minor unit gave up nothing by
+ * definition: $39.362 is $39.36, not approximately $39.36, and it printed
+ * without a tilde in every version of this extension.
  */
-function sunkDecimals(amount: number, code: string): number | null {
-  const magnitude = Math.abs(amount);
-  if (magnitude === 0) return null;
-
-  const natural = naturalDecimals(code);
-  if (Math.round(magnitude * 10 ** natural) !== 0) return null;
-
-  // One place past the first significant digit, and Intl caps fraction digits
-  // at 20 whatever we ask for.
-  return Math.min(20, Math.ceil(-Math.log10(magnitude)) + 1);
+function coarsened(rounding: Rounding, decimals: number, natural: number): boolean {
+  return !(rounding === 'exact' && decimals === natural);
 }
 
 /** True when displaying `amount` at `decimals` places changes its value. */
-function isApproximate(amount: number, decimals: number | null): boolean {
-  if (decimals === null) return false;
+function isApproximate(amount: number, decimals: number): boolean {
   const factor = 10 ** decimals;
   return Math.abs(Math.round(amount * factor) / factor - amount) > 1e-9;
 }
@@ -88,14 +115,65 @@ export function formatCurrencyAmount(
   code: string,
   rounding: Rounding = 'exact'
 ): string {
+  const asset = CRYPTO_BY_CODE.get(code);
+  if (asset) return formatCryptoAmount(amount, asset, rounding);
+
   try {
-    const decimals = decimalsFor(amount, code, rounding);
+    const natural = naturalDecimals(code);
+    const decimals = decimalsFor(amount, natural, rounding);
+    if (amount > 0 && amount < SMALLEST / 2) {
+      return `<${getFormatter(code, MAX_DECIMALS).format(SMALLEST)}`;
+    }
+
     const text = getFormatter(code, decimals).format(amount);
     // The tilde is the whole point of a rounding mode: it admits the number moved.
-    return isApproximate(amount, decimals) ? `≈${text}` : text;
+    return coarsened(rounding, decimals, natural) && isApproximate(amount, decimals)
+      ? `≈${text}`
+      : text;
   } catch {
     return `${amount.toFixed(2)} ${code}`;
   }
+}
+
+/**
+ * Crypto never goes through `style: 'currency'`.
+ *
+ * `Intl` accepts a three-letter code it has never heard of and quietly formats
+ * it with two decimals, so BTC printed as `BTC 0.00`; a four-letter one
+ * (`DOGE`, `USDT`) throws `RangeError` outright and used to land in the
+ * fallback above, as `0.00 DOGE`. Both are the same failure: a price that is
+ * worth something displayed as nothing. A plain decimal formatter plus the
+ * ticker has neither problem.
+ */
+function formatCryptoAmount(amount: number, asset: CryptoAsset, rounding: Rounding): string {
+  const decimals = decimalsFor(amount, asset.decimals, rounding);
+  if (amount > 0 && amount < SMALLEST / 2) {
+    return `<${decimalText(SMALLEST, MAX_DECIMALS)}${NBSP}${asset.code}`;
+  }
+
+  const text = `${decimalText(amount, decimals)}${NBSP}${asset.code}`;
+  return coarsened(rounding, decimals, asset.decimals) && isApproximate(amount, decimals)
+    ? `≈${text}`
+    : text;
+}
+
+/**
+ * No minimum: a currency shows its minor unit in full (`€0.50`), a crypto
+ * amount padded to its ceiling would read `0.00001560 BTC`, which is the same
+ * number wearing four zeroes it did not earn.
+ */
+function decimalText(amount: number, decimals: number): string {
+  const key = `decimal:${decimals}`;
+  let formatter = FORMATTERS.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(uiLocale(), {
+      style: 'decimal',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: decimals,
+    });
+    FORMATTERS.set(key, formatter);
+  }
+  return formatter.format(amount);
 }
 
 /**
