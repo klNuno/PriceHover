@@ -22,6 +22,12 @@ export default defineConfig({
     // extension icon. It grants nothing at rest and shows no install warning.
     permissions: ['storage', 'activeTab'],
     host_permissions: ['https://open.er-api.com/*'],
+    // Optional, and off until the user turns crypto on from the options page.
+    // Declaring the capability is not using it: nothing is requested, and
+    // nothing is contacted, for a profile that never opts in. That is what
+    // keeps "the extension contacts exactly one host" true for everyone else,
+    // in PRIVACY.md, in the README and in the Firefox declaration below.
+    optional_host_permissions: ['https://api.coingecko.com/*'],
     icons: {
       16: 'icons/icon-16.png',
       32: 'icons/icon-32.png',

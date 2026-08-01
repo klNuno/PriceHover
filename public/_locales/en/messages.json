@@ -29,6 +29,15 @@
   "settings": {
     "message": "Settings"
   },
+  "cryptoEnabled": {
+    "message": "Bitcoin and other crypto"
+  },
+  "cryptoEnabledHelp": {
+    "message": "Adds 24 crypto assets. Crypto rates come from api.coingecko.com, a second host contacted only while this is on, about once an hour."
+  },
+  "cryptoDenied": {
+    "message": "Crypto stays off without access to api.coingecko.com."
+  },
   "ratesUpdated": {
     "message": "Rates $1"
   },

@@ -1,23 +1,27 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { convertPrice } from '../../src/convert';
-  import { CURRENCIES, CURRENCY_BY_CODE, flagToCountryCode } from '../../src/currencies';
+  import { CRYPTO_ASSETS, isCryptoCode } from '../../src/crypto';
+  import { ASSET_BY_CODE, CURRENCIES, flagToCountryCode } from '../../src/currencies';
   import { flagImage } from '../../src/flags';
   import { t, uiLocale } from '../../src/i18n';
   import { MESSAGE, send } from '../../src/messages';
   import { parseQuery } from '../../src/query';
-  import { parseRates } from '../../src/rates';
+  import { parseCryptoTable, parseRates } from '../../src/rates';
   import {
-    defaultSettings, isSiteDisabled, normalizeHostname, readSettings, updateSettings, watchSettings,
+    defaultSettings, isSiteDisabled, normalizeHostname, readSettings, updateSettings, wantsCrypto,
+    watchSettings,
   } from '../../src/settings';
   import type { Settings, SettingsPatch } from '../../src/settings';
   import { formatAgo } from '../../src/time';
-  import { STALE_AFTER_MS, STORAGE } from '../../src/types';
+  import { CRYPTO_STALE_AFTER_MS, STALE_AFTER_MS, STORAGE } from '../../src/types';
   import type { ExchangeRates } from '../../src/types';
 
   let settings = $state<Settings>(defaultSettings());
-  let rates = $state<ExchangeRates | null>(null);
+  let fiatRates = $state<ExchangeRates | null>(null);
+  let cryptoRates = $state<ExchangeRates | null>(null);
   let ratesTimestamp = $state(0);
+  let cryptoTimestamp = $state(0);
   let query = $state('');
   let hostname = $state('');
   let refreshing = $state(false);
@@ -61,10 +65,7 @@
     loaded = true;
 
     try {
-      const stored = await chrome.storage.local.get([STORAGE.RATES, STORAGE.RATES_TS]);
-      rates = parseRates(stored?.[STORAGE.RATES]);
-      const ts = stored?.[STORAGE.RATES_TS];
-      ratesTimestamp = typeof ts === 'number' ? ts : 0;
+      await readRates();
     } catch (e) {
       console.error('[PH] rates read failed', e);
     }
@@ -128,24 +129,58 @@
     );
   }
 
+  async function readRates(): Promise<void> {
+    const stored = await chrome.storage.local.get([
+      STORAGE.RATES, STORAGE.RATES_TS, STORAGE.CRYPTO_RATES, STORAGE.CRYPTO_TS,
+    ]);
+    fiatRates = parseRates(stored?.[STORAGE.RATES]);
+    cryptoRates = parseCryptoTable(stored?.[STORAGE.CRYPTO_RATES]);
+    const ts = stored?.[STORAGE.RATES_TS];
+    const cryptoTs = stored?.[STORAGE.CRYPTO_TS];
+    ratesTimestamp = typeof ts === 'number' ? ts : 0;
+    cryptoTimestamp = typeof cryptoTs === 'number' ? cryptoTs : 0;
+  }
+
   async function refresh(): Promise<void> {
     refreshing = true;
+    // Both hosts, and the crypto one only when it would show something. Its
+    // failure is not the fiat one's: the button reports the fiat result, which
+    // is the one every user has.
     const result = await send<{ ok: boolean; timestamp?: number }>(MESSAGE.REFRESH_RATES);
+    if (wantsCrypto(settings)) await send(MESSAGE.REFRESH_CRYPTO);
     refreshing = false;
 
     if (!result?.ok) { error = t('refreshFailed'); return; }
     error = '';
-    const stored = await chrome.storage.local.get([STORAGE.RATES, STORAGE.RATES_TS]);
-    rates = parseRates(stored?.[STORAGE.RATES]);
+    await readRates();
     ratesTimestamp = result.timestamp ?? Date.now();
   }
 
   const parsed = $derived(parseQuery(query, settings.baseCurrency));
   const isCalc = $derived(parsed.price !== null);
-  const stale = $derived(ratesTimestamp > 0 && Date.now() - ratesTimestamp > STALE_AFTER_MS);
+
+  /** One table for everything downstream; the crypto half wins a collision. */
+  const rates = $derived.by(() => {
+    if (!fiatRates) return null;
+    return cryptoRates ? { ...fiatRates, ...cryptoRates } : fiatRates;
+  });
+
+  /**
+   * The label reports the older of the two sources whenever a crypto row is on
+   * screen. "Rates 2 minutes ago" next to a five-hour-old BTC row would be true
+   * about the fiat table and a lie about the number underneath it.
+   */
+  const cryptoShown = $derived(wantsCrypto(settings));
+  const shownTimestamp = $derived(
+    cryptoShown && cryptoTimestamp > 0 ? Math.min(ratesTimestamp, cryptoTimestamp) : ratesTimestamp
+  );
+  const stale = $derived(
+    (ratesTimestamp > 0 && Date.now() - ratesTimestamp > STALE_AFTER_MS) ||
+    (cryptoShown && cryptoTimestamp > 0 && Date.now() - cryptoTimestamp > CRYPTO_STALE_AFTER_MS)
+  );
 
   const ratesLabel = $derived(
-    ratesTimestamp === 0 ? t('ratesNever') : t('ratesUpdated', formatAgo(ratesTimestamp))
+    shownTimestamp === 0 ? t('ratesNever') : t('ratesUpdated', formatAgo(shownTimestamp))
   );
 
   /**
@@ -156,7 +191,10 @@
   const orderedCurrencies = $derived.by(() => {
     const chosen = [settings.baseCurrency, ...settings.targetCurrencies];
     const rank = new Map(chosen.map((code, index) => [code, index]));
-    return [...CURRENCIES].sort((a, b) => {
+    // Crypto is listed only when it is switched on. Forty-four rows plus
+    // twenty-four nobody asked for is a list nobody scrolls.
+    const pool = settings.cryptoEnabled ? [...CURRENCIES, ...CRYPTO_ASSETS] : CURRENCIES;
+    return [...pool].sort((a, b) => {
       const ra = rank.get(a.code) ?? Number.MAX_SAFE_INTEGER;
       const rb = rank.get(b.code) ?? Number.MAX_SAFE_INTEGER;
       return ra - rb;
@@ -165,7 +203,10 @@
 
   const visibleCurrencies = $derived.by(() => {
     if (parsed.targetCode) {
-      const currency = CURRENCY_BY_CODE.get(parsed.targetCode);
+      const currency = ASSET_BY_CODE.get(parsed.targetCode);
+      // A crypto code typed while crypto is off resolves to nothing rather
+      // than to a row that can never be priced.
+      if (currency && isCryptoCode(currency.code) && !settings.cryptoEnabled) return [];
       return currency ? [currency] : [];
     }
     if (parsed.filter) {

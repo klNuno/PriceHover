@@ -1,3 +1,4 @@
+import { CRYPTO_ASSETS } from './crypto';
 import type { Currency } from './types';
 
 export const CURRENCIES: Currency[] = [
@@ -48,6 +49,19 @@ export const CURRENCIES: Currency[] = [
 ];
 
 export const CURRENCY_BY_CODE = new Map(CURRENCIES.map((c) => [c.code, c]));
+
+/**
+ * Everything that can appear as a row: fiat plus the crypto assets.
+ *
+ * Detection deliberately does **not** read this map. `detector.ts` builds its
+ * ISO-code tokens from `CURRENCY_BY_CODE` alone, so widening what the extension
+ * can convert never widens what it believes is a price on a page. `ATOM`,
+ * `LINK`, `NEAR` and `ETC` are convertible targets and are not tokens.
+ */
+export const ASSET_BY_CODE = new Map<string, Currency>([
+  ...CURRENCY_BY_CODE,
+  ...CRYPTO_ASSETS.map((a) => [a.code, a] as const),
+]);
 
 // Extract 2-letter country code from a flag emoji (Regional Indicator Symbol pair)
 // e.g. '🇺🇸' → 'us', '🇪🇺' → 'eu'

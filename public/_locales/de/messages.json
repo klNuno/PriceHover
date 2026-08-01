@@ -29,6 +29,15 @@
   "settings": {
     "message": "Einstellungen"
   },
+  "cryptoEnabled": {
+    "message": "Bitcoin und andere Kryptos"
+  },
+  "cryptoEnabledHelp": {
+    "message": "Fügt 24 Kryptowerte hinzu. Deren Kurse stammen von api.coingecko.com, einem zweiten Host, der nur bei aktivierter Option kontaktiert wird, etwa einmal pro Stunde."
+  },
+  "cryptoDenied": {
+    "message": "Krypto bleibt ohne Zugriff auf api.coingecko.com deaktiviert."
+  },
   "ratesUpdated": {
     "message": "Kurse $1"
   },

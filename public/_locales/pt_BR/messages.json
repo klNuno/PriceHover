@@ -29,6 +29,15 @@
   "settings": {
     "message": "Configurações"
   },
+  "cryptoEnabled": {
+    "message": "Bitcoin e outras criptos"
+  },
+  "cryptoEnabledHelp": {
+    "message": "Adiciona 24 criptoativos. As taxas vêm de api.coingecko.com, um segundo host contatado apenas enquanto isto estiver ativo, cerca de uma vez por hora."
+  },
+  "cryptoDenied": {
+    "message": "As criptos continuam desativadas sem acesso a api.coingecko.com."
+  },
   "ratesUpdated": {
     "message": "Taxas $1"
   },

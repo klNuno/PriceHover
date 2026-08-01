@@ -1,9 +1,44 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
   DEFAULT_SETTINGS, defaultSettings, displayCurrencies, isActiveOn, isSiteDisabled, migrateLegacy,
-  normalizeHostname, parseHostnameInput, parseSettings, readSettings, updateSettings,
+  normalizeHostname, parseHostnameInput, parseSettings, readSettings, updateSettings, wantsCrypto,
 } from './settings';
 import { STORAGE } from './types';
+
+describe('crypto settings', () => {
+  test('off unless the stored value is exactly true', () => {
+    expect(parseSettings({}).cryptoEnabled).toBe(false);
+    expect(parseSettings({ cryptoEnabled: 'yes' }).cryptoEnabled).toBe(false);
+    expect(parseSettings({ cryptoEnabled: 1 }).cryptoEnabled).toBe(false);
+    expect(parseSettings({ cryptoEnabled: true }).cryptoEnabled).toBe(true);
+  });
+
+  test('settings written before this version keep working', () => {
+    const migrated = parseSettings({ baseCurrency: 'EUR', targetCurrencies: ['USD'] });
+    expect(migrated.cryptoEnabled).toBe(false);
+    expect(migrated.targetCurrencies).toEqual(['USD']);
+  });
+
+  test('a crypto target survives a parse, a crypto base does not', () => {
+    // Everything is converted to the base and an inferred price falls back to
+    // it, so a base that exists only while an optional permission is granted
+    // would leave those paths undefined the moment it is revoked.
+    const parsed = parseSettings({ baseCurrency: 'BTC', targetCurrencies: ['BTC', 'XMR', 'USD'] });
+    expect(parsed.baseCurrency).toBe(DEFAULT_SETTINGS.baseCurrency);
+    expect(parsed.targetCurrencies).toEqual(['BTC', 'XMR', 'USD']);
+  });
+
+  test('an unknown ticker is still dropped', () => {
+    expect(parseSettings({ targetCurrencies: ['BTC', 'NOTACOIN'] }).targetCurrencies).toEqual(['BTC']);
+  });
+
+  test('the fetch is gated on a row actually being shown', () => {
+    const on = (patch: object) => wantsCrypto(parseSettings({ cryptoEnabled: true, ...patch }));
+    expect(on({ targetCurrencies: ['BTC'] })).toBe(true);
+    expect(on({ targetCurrencies: ['USD'] })).toBe(false);
+    expect(wantsCrypto(parseSettings({ cryptoEnabled: false, targetCurrencies: ['BTC'] }))).toBe(false);
+  });
+});
 
 describe('parseSettings', () => {
   test('anything unusable falls back to the defaults', () => {

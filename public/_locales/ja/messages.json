@@ -29,6 +29,15 @@
   "settings": {
     "message": "設定"
   },
+  "cryptoEnabled": {
+    "message": "ビットコインなどの暗号資産"
+  },
+  "cryptoEnabledHelp": {
+    "message": "24種類の暗号資産を追加します。レートは api.coingecko.com から取得し、この設定が有効な間だけ、1時間に1回程度接続します。"
+  },
+  "cryptoDenied": {
+    "message": "api.coingecko.com へのアクセスがない場合、暗号資産は無効のままです。"
+  },
   "ratesUpdated": {
     "message": "レート $1"
   },

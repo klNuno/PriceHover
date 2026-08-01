@@ -1,8 +1,9 @@
 import { MESSAGE } from '../src/messages';
 import type { RefreshResult } from '../src/messages';
-import { fetchRates } from '../src/rates';
-import { loadSettings, parseSettings } from '../src/settings';
-import { CACHE_DURATION_MS, STORAGE } from '../src/types';
+import { hasCryptoAccess, watchCryptoRevoked } from '../src/permissions';
+import { fetchCryptoRates, fetchRates } from '../src/rates';
+import { loadSettings, parseSettings, updateSettings, wantsCrypto } from '../src/settings';
+import { CACHE_DURATION_MS, CRYPTO_CACHE_MS, STORAGE } from '../src/types';
 
 /**
  * One request at a time. The popup, the options page and every content script
@@ -32,8 +33,46 @@ function refreshRates(): Promise<RefreshResult> {
   return inFlight;
 }
 
+/**
+ * The crypto host is contacted only when all three hold: the user asked for it,
+ * the browser still grants it, and a crypto row would actually be shown. A
+ * profile that never opts in makes exactly as many requests as it did before
+ * this feature existed, which is none.
+ */
+let cryptoInFlight: Promise<RefreshResult> | null = null;
+
+function refreshCryptoRates(): Promise<RefreshResult> {
+  cryptoInFlight ??= (async (): Promise<RefreshResult> => {
+    try {
+      const settings = await loadSettings();
+      if (!wantsCrypto(settings) || !(await hasCryptoAccess())) return { ok: false };
+
+      const rates = await fetchCryptoRates();
+      if (!rates) throw new Error('Invalid response: missing or unusable crypto rates');
+
+      const timestamp = Date.now();
+      await chrome.storage.local.set({
+        [STORAGE.CRYPTO_RATES]: rates,
+        [STORAGE.CRYPTO_TS]: timestamp,
+      });
+      return { ok: true, timestamp };
+    } catch (err) {
+      console.error('[PriceHover] Failed to refresh crypto rates:', err);
+      return { ok: false };
+    }
+  })().finally(() => { cryptoInFlight = null; });
+
+  return cryptoInFlight;
+}
+
+/** Rates for a host we may no longer contact are not rates, they are a memory. */
+async function forgetCryptoRates(): Promise<void> {
+  await chrome.storage.local.remove([STORAGE.CRYPTO_RATES, STORAGE.CRYPTO_TS]).catch(() => {});
+  await updateSettings({ cryptoEnabled: false }).catch(() => {});
+}
+
 async function refreshIfStale(): Promise<void> {
-  const stored = await chrome.storage.local.get([STORAGE.RATES_TS]);
+  const stored = await chrome.storage.local.get([STORAGE.RATES_TS, STORAGE.CRYPTO_TS]);
   const ts = (stored as Record<string, unknown>)[STORAGE.RATES_TS];
   const lastRefresh = typeof ts === 'number' ? ts : 0;
 
@@ -41,6 +80,10 @@ async function refreshIfStale(): Promise<void> {
   // arithmetic read that as infinitely fresh, so the rates never refreshed
   // again for as long as the skew lasted.
   if (Math.abs(Date.now() - lastRefresh) > CACHE_DURATION_MS) await refreshRates();
+
+  const cryptoTs = (stored as Record<string, unknown>)[STORAGE.CRYPTO_TS];
+  const lastCrypto = typeof cryptoTs === 'number' ? cryptoTs : 0;
+  if (Math.abs(Date.now() - lastCrypto) > CRYPTO_CACHE_MS) await refreshCryptoRates();
 }
 
 async function setBadge(enabled: boolean): Promise<void> {
@@ -92,6 +135,10 @@ export default defineBackground(() => {
     setBadge(parseSettings(changes[STORAGE.SETTINGS].newValue).enabled).catch(() => {});
   });
 
+  // Revocation happens outside this extension's UI as often as inside it, from
+  // the browser's own permissions panel, and nothing else would ever tell us.
+  watchCryptoRevoked(() => { forgetCryptoRates().catch(() => {}); });
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const type = (message as { type?: string })?.type;
 
@@ -104,6 +151,11 @@ export default defineBackground(() => {
     if (type === MESSAGE.REFRESH_RATES) {
       refreshRates().then(sendResponse);
       return true; // keeps the channel open for the async reply
+    }
+
+    if (type === MESSAGE.REFRESH_CRYPTO) {
+      refreshCryptoRates().then(sendResponse);
+      return true;
     }
 
     return false;
@@ -120,4 +172,7 @@ export default defineBackground(() => {
   // chrome.alarms would survive the teardown but costs an extra permission we
   // deliberately do not ask for.
   setInterval(() => { refreshRates().catch(() => {}); }, CACHE_DURATION_MS);
+  // Same caveat, shorter clock. It is a no-op unless crypto is both asked for
+  // and granted, so it costs a timer and nothing else on a default profile.
+  setInterval(() => { refreshCryptoRates().catch(() => {}); }, CRYPTO_CACHE_MS);
 });

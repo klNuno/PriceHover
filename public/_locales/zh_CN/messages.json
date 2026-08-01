@@ -29,6 +29,15 @@
   "settings": {
     "message": "设置"
   },
+  "cryptoEnabled": {
+    "message": "比特币及其他加密货币"
+  },
+  "cryptoEnabledHelp": {
+    "message": "添加 24 种加密资产。汇率来自 api.coingecko.com，仅在此项开启时约每小时连接一次。"
+  },
+  "cryptoDenied": {
+    "message": "未获得 api.coingecko.com 的访问权限时，加密货币保持关闭。"
+  },
   "ratesUpdated": {
     "message": "汇率 $1"
   },

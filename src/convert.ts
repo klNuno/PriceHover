@@ -1,4 +1,4 @@
-import { CURRENCY_BY_CODE } from './currencies';
+import { ASSET_BY_CODE } from './currencies';
 import { formatCurrencyAmount } from './formatter';
 import type { Rounding } from './settings';
 import type { ConvertedPrice, DetectedPrice, ExchangeRates } from './types';
@@ -27,7 +27,7 @@ export function convertPrice(
     if (code === detected.currencyCode) continue;
 
     const targetRate = usableRate(rates, code);
-    const currency = CURRENCY_BY_CODE.get(code);
+    const currency = ASSET_BY_CODE.get(code);
     if (targetRate === null || !currency) continue;
 
     const factor = targetRate / sourceRate;

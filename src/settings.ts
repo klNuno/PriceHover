@@ -1,4 +1,5 @@
-import { CURRENCY_BY_CODE } from './currencies';
+import { isCryptoCode } from './crypto';
+import { ASSET_BY_CODE, CURRENCY_BY_CODE } from './currencies';
 import { STORAGE, DEFAULT_CURRENCIES } from './types';
 
 /**
@@ -28,6 +29,13 @@ export interface Settings {
   inlineMode: boolean;
   /** Resolve `$`, `kr` and `¥` using the page's domain and language. */
   usePageContext: boolean;
+  /**
+   * Whether crypto rates may be fetched at all. Off by default, and false is
+   * not the same as "no crypto in the list": the browser permission is the
+   * authority, this flag only records that the user asked. A permission
+   * revoked from the browser's own UI flips it back off.
+   */
+  cryptoEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -39,6 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
   rounding: 'smart',
   inlineMode: false,
   usePageContext: true,
+  cryptoEnabled: false,
 };
 
 export const HOVER_DELAY_CHOICES = [0, 120, 180, 300, 500] as const;
@@ -111,15 +120,23 @@ export function displayCurrencies(settings: Settings): string[] {
   return [settings.baseCurrency, ...settings.targetCurrencies];
 }
 
+/**
+ * The base currency stays fiat. Everything is converted *from* the page and
+ * *to* this one, it is the row the tooltip emphasises, and it is what an
+ * inferred price falls back to: a base that only exists while an optional
+ * permission is granted would leave every one of those paths undefined the
+ * moment the user revokes it.
+ */
 function validCode(value: unknown, fallback: string): string {
   return typeof value === 'string' && CURRENCY_BY_CODE.has(value) ? value : fallback;
 }
 
+/** Targets may be crypto. Nothing breaks when a target has no rate: it is skipped. */
 function validCodeList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
   for (const item of value) {
-    if (typeof item === 'string' && CURRENCY_BY_CODE.has(item)) seen.add(item);
+    if (typeof item === 'string' && ASSET_BY_CODE.has(item)) seen.add(item);
   }
   return [...seen];
 }
@@ -164,7 +181,13 @@ export function parseSettings(raw: unknown): Settings {
         : DEFAULT_SETTINGS.rounding,
     inlineMode: input.inlineMode === true,
     usePageContext: input.usePageContext !== false,
+    cryptoEnabled: input.cryptoEnabled === true,
   };
+}
+
+/** True when a crypto row would actually be shown, which is what gates the fetch. */
+export function wantsCrypto(settings: Settings): boolean {
+  return settings.cryptoEnabled && settings.targetCurrencies.some(isCryptoCode);
 }
 
 /**
