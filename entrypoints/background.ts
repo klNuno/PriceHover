@@ -34,18 +34,24 @@ function refreshRates(): Promise<RefreshResult> {
 }
 
 /**
- * The crypto host is contacted only when all three hold: the user asked for it,
- * the browser still grants it, and a crypto row would actually be shown. A
- * profile that never opts in makes exactly as many requests as it did before
- * this feature existed, which is none.
+ * The crypto host is contacted only when the user asked for the feature and the
+ * browser still grants it. A profile that never opts in makes exactly as many
+ * requests as it did before this feature existed, which is none.
+ *
+ * `onDemand` is the difference between the two callers. The hourly tick fetches
+ * only for a list that shows a crypto row, so a profile with the switch on and
+ * no crypto target sits idle. The content script asks on demand, and it asks
+ * for a second reason the tick cannot see: a page priced *in* crypto needs the
+ * source rate, whatever the target list holds.
  */
 let cryptoInFlight: Promise<RefreshResult> | null = null;
 
-function refreshCryptoRates(): Promise<RefreshResult> {
+function refreshCryptoRates(onDemand = false): Promise<RefreshResult> {
   cryptoInFlight ??= (async (): Promise<RefreshResult> => {
     try {
       const settings = await loadSettings();
-      if (!wantsCrypto(settings) || !(await hasCryptoAccess())) return { ok: false };
+      const asked = onDemand ? settings.cryptoEnabled : wantsCrypto(settings);
+      if (!asked || !(await hasCryptoAccess())) return { ok: false, skipped: true };
 
       const rates = await fetchCryptoRates();
       if (!rates) throw new Error('Invalid response: missing or unusable crypto rates');
@@ -154,7 +160,8 @@ export default defineBackground(() => {
     }
 
     if (type === MESSAGE.REFRESH_CRYPTO) {
-      refreshCryptoRates().then(sendResponse);
+      // Only ever sent by a caller that already knows a crypto rate is needed.
+      refreshCryptoRates(true).then(sendResponse);
       return true;
     }
 

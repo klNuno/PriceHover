@@ -99,9 +99,25 @@ function decimalsFor(amount: number, natural: number, rounding: Rounding): numbe
  * announces. `exact` at the currency's own minor unit gave up nothing by
  * definition: $39.362 is $39.36, not approximately $39.36, and it printed
  * without a tilde in every version of this extension.
+ *
+ * Crypto never gets this exemption, and the reason is in `crypto.ts`: an
+ * asset's `decimals` is a display ceiling, not a minor unit. Nothing makes
+ * 1234.56 SHIB into 1,235 SHIB the way ISO 4217 makes $39.362 into $39.36, so
+ * that number moved and says so.
  */
 function coarsened(rounding: Rounding, decimals: number, natural: number): boolean {
   return !(rounding === 'exact' && decimals === natural);
+}
+
+/**
+ * An amount too small for `MAX_DECIMALS`, stated as the bound it is under.
+ *
+ * Sign matters: -4e-9 is not below -0.00000001, it is above it, and printing
+ * either side as a padded zero is the failure this whole floor exists to
+ * prevent.
+ */
+function boundText(negative: boolean, smallest: string): string {
+  return negative ? `>-${smallest}` : `<${smallest}`;
 }
 
 /** True when displaying `amount` at `decimals` places changes its value. */
@@ -121,8 +137,9 @@ export function formatCurrencyAmount(
   try {
     const natural = naturalDecimals(code);
     const decimals = decimalsFor(amount, natural, rounding);
-    if (amount > 0 && amount < SMALLEST / 2) {
-      return `<${getFormatter(code, MAX_DECIMALS).format(SMALLEST)}`;
+    const magnitude = Math.abs(amount);
+    if (magnitude > 0 && magnitude < SMALLEST / 2) {
+      return boundText(amount < 0, getFormatter(code, MAX_DECIMALS).format(SMALLEST));
     }
 
     const text = getFormatter(code, decimals).format(amount);
@@ -147,14 +164,14 @@ export function formatCurrencyAmount(
  */
 function formatCryptoAmount(amount: number, asset: CryptoAsset, rounding: Rounding): string {
   const decimals = decimalsFor(amount, asset.decimals, rounding);
-  if (amount > 0 && amount < SMALLEST / 2) {
-    return `<${decimalText(SMALLEST, MAX_DECIMALS)}${NBSP}${asset.code}`;
+  const magnitude = Math.abs(amount);
+  if (magnitude > 0 && magnitude < SMALLEST / 2) {
+    return boundText(amount < 0, `${decimalText(SMALLEST, MAX_DECIMALS)}${NBSP}${asset.code}`);
   }
 
   const text = `${decimalText(amount, decimals)}${NBSP}${asset.code}`;
-  return coarsened(rounding, decimals, asset.decimals) && isApproximate(amount, decimals)
-    ? `≈${text}`
-    : text;
+  // No `coarsened` exemption here: the ceiling is ours, not the asset's.
+  return isApproximate(amount, decimals) ? `≈${text}` : text;
 }
 
 /**
@@ -179,6 +196,10 @@ function decimalText(amount: number, decimals: number): string {
 /**
  * A range prints with one currency marker: "$10 – 20" rather than "$10 – $20",
  * which reads as two unrelated prices in a tooltip 240 px wide.
+ *
+ * The marker is not always in front. Crypto puts its ticker behind the number,
+ * and so does `Intl` in half the locales it knows, so the shared run is dropped
+ * from whichever end carries it: "0.05 – 0.10 BTC", not "0.05 BTC – 0.10 BTC".
  */
 export function formatCurrencyRange(
   min: number,
@@ -189,18 +210,24 @@ export function formatCurrencyRange(
   const low = formatCurrencyAmount(min, code, rounding);
   const high = formatCurrencyAmount(max, code, rounding);
 
-  // Drop the leading run the two share (symbol, and `≈` when both carry it)
-  // but never a digit, so "$1" and "$12" keep their first character.
+  // Never a digit, so "$1" and "$12" keep their first character and "5 BTC"
+  // and "15 BTC" keep their last.
+  const sharedPrefix = sharedRun(low, high, (s, i) => s[i]);
+  const sharedSuffix = sharedRun(low, high, (s, i) => s[s.length - 1 - i]);
+
+  const head = low.slice(0, low.length - sharedSuffix) || low;
+  const tail = high.slice(sharedPrefix) || high;
+  return `${head} – ${tail}`;
+}
+
+/** Length of the run the two share at one end, stopping at the first digit. */
+function sharedRun(a: string, b: string, at: (s: string, i: number) => string): number {
   let shared = 0;
-  while (
-    shared < low.length &&
-    shared < high.length &&
-    low[shared] === high[shared] &&
-    !/\d/.test(low[shared])
-  ) {
+  while (shared < a.length && shared < b.length && at(a, shared) === at(b, shared) &&
+         !/\d/.test(at(a, shared))) {
     shared++;
   }
-  return `${low} – ${high.slice(shared)}`;
+  return shared;
 }
 
 /** Clears memoised formatters. Only useful if the UI language changes mid-session. */

@@ -6,6 +6,7 @@
   import { flagImage } from '../../src/flags';
   import { t, uiLocale } from '../../src/i18n';
   import { MESSAGE, send } from '../../src/messages';
+  import { hasCryptoAccess, watchCryptoRevoked } from '../../src/permissions';
   import { parseQuery } from '../../src/query';
   import { parseCryptoTable, parseRates } from '../../src/rates';
   import {
@@ -32,6 +33,16 @@
 
   const version = chrome.runtime.getManifest().version;
   let unwatch: (() => void) | null = null;
+
+  /**
+   * What the browser says, not what the settings key remembers, and for the
+   * same reason the options page tracks it: a permission revoked from the
+   * browser's own panel never passes through either page, and a list of
+   * twenty-four assets nothing can price is a list of nothing.
+   */
+  let cryptoGranted = $state(false);
+  const unwatchCrypto = watchCryptoRevoked(() => { cryptoGranted = false; });
+  const cryptoUsable = $derived(settings.cryptoEnabled && cryptoGranted);
 
   onMount(async () => {
     // The page ships in eight locales, so the document language cannot be a
@@ -70,6 +81,8 @@
       console.error('[PH] rates read failed', e);
     }
 
+    cryptoGranted = await hasCryptoAccess();
+
     // `activeTab` gives the URL only because the user just clicked the icon,
     // which is exactly the gesture that should unlock a per-site switch.
     try {
@@ -83,7 +96,7 @@
     } catch { /* no activeTab grant, or an internal page */ }
   });
 
-  onDestroy(() => unwatch?.());
+  onDestroy(() => { unwatch?.(); unwatchCrypto?.(); });
 
   /**
    * The new value lands in `settings` only once storage has taken it, so the UI
@@ -191,9 +204,10 @@
   const orderedCurrencies = $derived.by(() => {
     const chosen = [settings.baseCurrency, ...settings.targetCurrencies];
     const rank = new Map(chosen.map((code, index) => [code, index]));
-    // Crypto is listed only when it is switched on. Forty-four rows plus
-    // twenty-four nobody asked for is a list nobody scrolls.
-    const pool = settings.cryptoEnabled ? [...CURRENCIES, ...CRYPTO_ASSETS] : CURRENCIES;
+    // Crypto is listed only when it is switched on and the host permission is
+    // actually held, the same pair the options page checks. Forty-four rows
+    // plus twenty-four nobody asked for is a list nobody scrolls.
+    const pool = cryptoUsable ? [...CURRENCIES, ...CRYPTO_ASSETS] : CURRENCIES;
     return [...pool].sort((a, b) => {
       const ra = rank.get(a.code) ?? Number.MAX_SAFE_INTEGER;
       const rb = rank.get(b.code) ?? Number.MAX_SAFE_INTEGER;
@@ -204,9 +218,9 @@
   const visibleCurrencies = $derived.by(() => {
     if (parsed.targetCode) {
       const currency = ASSET_BY_CODE.get(parsed.targetCode);
-      // A crypto code typed while crypto is off resolves to nothing rather
-      // than to a row that can never be priced.
-      if (currency && isCryptoCode(currency.code) && !settings.cryptoEnabled) return [];
+      // A crypto code typed while crypto is off, or while its permission is
+      // gone, resolves to nothing rather than to a row that can never be priced.
+      if (currency && isCryptoCode(currency.code) && !cryptoUsable) return [];
       return currency ? [currency] : [];
     }
     if (parsed.filter) {

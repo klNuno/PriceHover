@@ -90,6 +90,10 @@ export default defineContentScript({
 
       try {
         const result = await send<RefreshResult>(MESSAGE.REFRESH_CRYPTO);
+        // Skipped is not failed: the switch is off, or the permission is gone.
+        // A timed backoff would be wrong in both directions, so this stops
+        // asking entirely until a settings change says the answer may differ.
+        if (result?.skipped) { cryptoUnavailable = true; return; }
         if (!result?.ok) { lastCryptoFailure = Date.now(); return; }
         await readStoredRates();
       } catch (err) {
@@ -134,9 +138,32 @@ export default defineContentScript({
       return ratesPromise;
     }
 
-    /** Nothing is asked of the crypto host for a list that shows no crypto row. */
+    /**
+     * A page priced in crypto needs the rate as much as a crypto row does, and
+     * the target list says nothing about it: `0.05 BTC` on a page converts into
+     * a euro row for a user who never added a crypto target. Detection follows
+     * the switch, so the rates have to follow detection, and this latch is what
+     * carries that across the two paths that find a price.
+     *
+     * Still nothing at rest: the latch is only ever set by a price already
+     * found on this page, so a session that meets none makes no request.
+     */
+    let cryptoSourceSeen = false;
+
+    /** Set when the background says it will not ask, cleared by a settings change. */
+    let cryptoUnavailable = false;
+
     function cryptoNeeded(): boolean {
-      return wantsCrypto(settings) && (!cryptoRates || cryptoAge() > CRYPTO_CACHE_MS);
+      if (!settings.cryptoEnabled || cryptoUnavailable) return false;
+      if (!wantsCrypto(settings) && !cryptoSourceSeen) return false;
+      return !cryptoRates || cryptoAge() > CRYPTO_CACHE_MS;
+    }
+
+    /** A crypto price we hold no rate for is the one thing that sets the latch. */
+    function notePrice(code: string): boolean {
+      if (!isCryptoCode(code) || rates?.[code]) return false;
+      cryptoSourceSeen = true;
+      return true;
     }
 
     /**
@@ -346,16 +373,23 @@ export default defineContentScript({
     let pending: { price: DetectedPrice; rect: DOMRect } | null = null;
 
     function show(price: DetectedPrice, rect: DOMRect): void {
+      // A price in an asset we hold no rate for is worth waiting for, exactly
+      // like the first hover of a session: the alternative is a tooltip that
+      // never appears and never says why.
+      const unpriced = notePrice(price.currencyCode);
+
       // A tab left open for a week converted at week-old rates: the staleness
       // check only ever ran when there were no rates at all.
-      if (rates && (ratesAge() > CACHE_DURATION_MS || cryptoNeeded())) void ensureRates();
+      if (rates && !unpriced && (ratesAge() > CACHE_DURATION_MS || cryptoNeeded())) void ensureRates();
 
-      if (!rates) {
+      if (!rates || unpriced) {
         pending = { price, rect };
         ensureRates().then(() => {
           const queued = pending;
           pending = null;
-          if (queued && rates) show(queued.price, queued.rect);
+          // Not `rates` alone: a crypto refresh that failed leaves the fiat
+          // table in place, and replaying the hover would only hide again.
+          if (queued && rates?.[queued.price.currencyCode]) show(queued.price, queued.rect);
         });
         return;
       }
@@ -574,6 +608,9 @@ export default defineContentScript({
           settings: () => settings,
           rates: () => rates,
           resolver: () => resolver,
+          // Inline never hovers anything, so this is its only way of saying it
+          // met a crypto price. The refresh that follows re-runs the pass.
+          onUnpriced: (code) => { if (notePrice(code)) void ensureRates(); },
         });
         // Inline mode is the one path that needs rates before any interaction.
         ensureRates().then(() => annotator?.refresh());
@@ -622,6 +659,9 @@ export default defineContentScript({
       settings = next;
       refreshResolver();
       setCryptoDetection(settings.cryptoEnabled);
+      // The switch or the permission may be what changed, so the refusal the
+      // background gave last time no longer stands.
+      cryptoUnavailable = false;
 
       const active = isActiveOn(settings, hostname);
       if (!active) { stopListening(); return; }

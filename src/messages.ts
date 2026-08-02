@@ -20,6 +20,12 @@ export type MessageType = (typeof MESSAGE)[keyof typeof MESSAGE];
 export interface RefreshResult {
   ok: boolean;
   timestamp?: number;
+  /**
+   * Nothing was attempted, so nothing failed: the feature is off, or its
+   * permission is not held. A caller that treats this as a failure backs off
+   * from a host it never asked anything of.
+   */
+  skipped?: boolean;
 }
 
 export function send<T = unknown>(type: MessageType): Promise<T | null> {

@@ -20,7 +20,7 @@ rescued; everything just above that kept a single significant digit, and the
 LINK, DOT, LTC, BCH, XLM, SHIB, UNI, ATOM, ETC, NEAR, APT, FIL.
 
 - Off until you turn it on in Settings → **Currencies**. Your browser asks before granting access to `api.coingecko.com`, and turning the switch back off hands the permission back and deletes the cached rates. Revoking it from the browser's own panel does the same.
-- Crypto rates refresh at most once an hour, and only while a crypto row would actually be shown. A profile without crypto makes exactly the requests it made before: one host, once a day.
+- Crypto rates refresh at most once an hour, and only when a crypto amount is actually in play: a crypto row in your list, or a price written in crypto on the page. A profile without crypto makes exactly the requests it made before: one host, once a day.
 - The tooltip's staleness warning is per source. A fresh euro rate no longer vouches for an hours-old bitcoin one.
 - Crypto formatting never goes through `Intl` currency formatting, which prints an unknown three-letter ticker with two decimals (`BTC 0.00`) and throws outright on a four-letter one (`DOGE`).
 - Prices written in crypto are read on the page too, for BTC, ETH, XMR, USDT, USDC, DOGE, XRP, LTC, BCH and the `₿` and `Ξ` glyphs. The other fourteen assets convert but are not tokens: `ATOM`, `LINK`, `NEAR`, `ETC` and friends are ordinary words in an all-caps heading, and `SOL` is the Peruvian sol.

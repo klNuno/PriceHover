@@ -79,8 +79,9 @@ the only thing that changes any of the above.
 - The request is `GET https://api.coingecko.com/api/v3/simple/price` with a
   fixed list of assets. Like the fiat one, it is made by the background worker,
   carries no page data and no identifier, and it names no page you have visited.
-- At most once an hour, and only while a crypto row would actually be shown. A
-  session in which nothing is converted makes no crypto request at all.
+- At most once an hour, and only when a crypto amount is actually in play:
+  either a crypto row in your list, or a price written in crypto on a page you
+  are reading. A session that meets neither makes no crypto request at all.
 - Turning the switch back off removes the permission and deletes the cached
   crypto rates. Revoking it from your browser's own permissions panel does the
   same thing.
