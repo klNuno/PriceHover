@@ -2,6 +2,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!globalThis.document) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
+import { setCryptoDetection } from './detector';
 import { createInlineAnnotator, INLINE_ATTR } from './inline';
 import { DEFAULT_SETTINGS } from './settings';
 import type { Settings } from './settings';
@@ -17,13 +18,18 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-function mount(html: string, overrides: Partial<Settings> = {}) {
+function mount(
+  html: string,
+  overrides: Partial<Settings> = {},
+  onUnpriced?: (code: string) => void
+) {
   document.body.innerHTML = html;
   const settings: Settings = { ...DEFAULT_SETTINGS, baseCurrency: 'EUR', rounding: 'exact', ...overrides };
   annotator = createInlineAnnotator({
     settings: () => settings,
     rates: () => RATES,
     resolver: () => undefined,
+    onUnpriced,
   });
   return annotator;
 }
@@ -41,6 +47,23 @@ describe('inline annotation', () => {
     mount('<p>Only $10.00</p>').scan(document.body);
     await flush();
     expect(badges()).toEqual(['(€9.00)']);
+  });
+
+  test('reports a price it holds no rate for', async () => {
+    // Inline never hovers anything, so this callback is the only way the
+    // content script hears that a page is priced in an asset whose rate was
+    // never fetched. Without it a page of BTC prices stayed bare for good.
+    const seen: string[] = [];
+    setCryptoDetection(true);
+    try {
+      mount('<p>Only 0.05 BTC</p>', { cryptoEnabled: true }, (code) => seen.push(code))
+        .scan(document.body);
+      await flush();
+    } finally {
+      setCryptoDetection(false);
+    }
+    expect(badges()).toEqual([]);
+    expect(seen).toEqual(['BTC']);
   });
 
   test('leaves the site’s own text untouched', async () => {

@@ -123,6 +123,33 @@ describe('crypto never goes through Intl currency formatting', () => {
   test('the floor applies to crypto too', () => {
     expect(plain(formatCurrencyAmount(0.0000000043, 'BTC', 'exact'))).toBe('<0.00000001 BTC');
   });
+
+  test('a display ceiling that moved the number says so, even in exact', () => {
+    // An asset's `decimals` is what fits in a tooltip, not a minor unit the way
+    // ISO 4217 defines one, so `exact` gets no silence exemption here: 7.499
+    // XLM printed as "7.5 XLM" and 1234.56 SHIB as "1,235 SHIB", both mute.
+    expect(plain(formatCurrencyAmount(7.499, 'XLM', 'exact'))).toBe('≈7.5 XLM');
+    expect(plain(formatCurrencyAmount(1234.56, 'SHIB', 'exact'))).toBe('≈1,235 SHIB');
+    // And still nothing to admit when nothing moved.
+    expect(plain(formatCurrencyAmount(12.5, 'USDT', 'exact'))).toBe('12.5 USDT');
+  });
+});
+
+describe('a negative amount below the floor is bounded from the other side', () => {
+  // The guard used to read `amount > 0`, so a refund or a delta smaller than
+  // the floor printed "≈-€0", which is the zero this whole floor exists to
+  // stop. -4.3e-9 is not below -0.00000001, it is above it.
+  test('fiat', () => {
+    expect(formatCurrencyAmount(-4.3e-9, 'EUR', 'exact')).toBe('>-€0.00000001');
+  });
+
+  test('crypto', () => {
+    expect(plain(formatCurrencyAmount(-4.3e-9, 'BTC', 'exact'))).toBe('>-0.00000001 BTC');
+  });
+
+  test('the positive side is unchanged', () => {
+    expect(formatCurrencyAmount(4.3e-9, 'EUR', 'exact')).toBe('<€0.00000001');
+  });
 });
 
 describe('smart rounding', () => {
@@ -169,6 +196,17 @@ describe('formatCurrencyRange', () => {
 
   test('a digit is never treated as a shared prefix', () => {
     expect(formatCurrencyRange(1, 12, 'USD', 'integer')).toBe('$1 – 12');
+  });
+
+  test('a marker behind the number is shared just the same', () => {
+    // Crypto prints its ticker last, so the prefix rule alone left both of
+    // them on screen: "0.05 BTC – 0.1 BTC".
+    expect(plain(formatCurrencyRange(0.05, 0.1, 'BTC', 'exact'))).toBe('0.05 – 0.1 BTC');
+    expect(plain(formatCurrencyRange(0.05, 0.1, 'BTC', 'smart'))).toBe('0.05 – 0.1 BTC');
+  });
+
+  test('a digit is never treated as a shared suffix either', () => {
+    expect(plain(formatCurrencyRange(5, 15, 'XLM', 'exact'))).toBe('5 – 15 XLM');
   });
 });
 

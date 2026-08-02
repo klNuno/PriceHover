@@ -1,4 +1,4 @@
-import { CRYPTO_ORIGIN_PATTERN } from './rates';
+import { CRYPTO_ORIGIN, CRYPTO_ORIGIN_PATTERN } from './rates';
 
 /**
  * The crypto host is an optional permission, so the browser is the authority on
@@ -44,10 +44,19 @@ export async function dropCryptoAccess(): Promise<void> {
   }
 }
 
-/** Calls back when the crypto host's permission is taken away, from anywhere. */
+/**
+ * Calls back when the crypto host's permission is taken away, from anywhere.
+ *
+ * Matched against the origin we asked for rather than a substring: the browser
+ * reports the pattern it granted, and a lone `includes('coingecko')` would also
+ * fire on a host that merely contains the word.
+ */
 export function watchCryptoRevoked(onRevoked: () => void): () => void {
   const listener = (permissions: chrome.permissions.Permissions): void => {
-    if (permissions.origins?.some((o) => o.includes('coingecko'))) onRevoked();
+    const hit = permissions.origins?.some(
+      (o) => o === CRYPTO_ORIGIN_PATTERN || o.startsWith(CRYPTO_ORIGIN)
+    );
+    if (hit) onRevoked();
   };
 
   try {

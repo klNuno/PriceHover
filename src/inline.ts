@@ -45,6 +45,8 @@ export interface InlineDeps {
   settings: () => Settings;
   rates: () => ExchangeRates | null;
   resolver: () => TokenResolver | undefined;
+  /** A price was found in a currency the rate table does not price. */
+  onUnpriced?: (code: string) => void;
 }
 
 interface Annotator {
@@ -209,7 +211,10 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
       if (!price) continue;
 
       const [converted] = convertPrice(price, rates, [base], settings.rounding);
-      if (!converted) continue;
+      // A price found and not converted is a rate we do not hold. The caller is
+      // the only one that can do anything about it, and it re-runs this pass
+      // when it has: crypto is the case that made this necessary.
+      if (!converted) { deps.onUnpriced?.(price.currencyCode); continue; }
       annotate(node, converted.formattedMax
         ? `${converted.formatted} – ${converted.formattedMax}`
         : converted.formatted);
