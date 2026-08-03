@@ -44,6 +44,12 @@
   "ratesNever": {
     "message": "Rates not loaded"
   },
+  "cryptoRatesUpdated": {
+    "message": "Crypto $1"
+  },
+  "cryptoRatesNever": {
+    "message": "Crypto rates not loaded"
+  },
   "ratesStale": {
     "message": "Rates may be out of date"
   },

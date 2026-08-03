@@ -121,6 +121,16 @@ const MESSAGES: Record<string, Entry> = {
     de: 'Kurse nicht geladen', pt_BR: 'Taxas não carregadas',
     it: 'Tassi non caricati', ja: 'レート未取得', zh_CN: '汇率未加载',
   },
+  cryptoRatesUpdated: {
+    en: 'Crypto $1', fr: 'Crypto $1', es: 'Cripto $1', de: 'Krypto $1',
+    pt_BR: 'Cripto $1', it: 'Cripto $1', ja: '暗号資産 $1', zh_CN: '加密货币 $1',
+  },
+  cryptoRatesNever: {
+    en: 'Crypto rates not loaded', fr: 'Taux crypto non chargés',
+    es: 'Tasas cripto no cargadas', de: 'Krypto-Kurse nicht geladen',
+    pt_BR: 'Taxas de cripto não carregadas', it: 'Tassi cripto non caricati',
+    ja: '暗号資産レート未取得', zh_CN: '加密货币汇率未加载',
+  },
   ratesStale: {
     en: 'Rates may be out of date', fr: 'Taux peut-être périmés',
     es: 'Las tasas pueden estar desactualizadas', de: 'Kurse möglicherweise veraltet',

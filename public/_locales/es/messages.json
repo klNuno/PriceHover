@@ -44,6 +44,12 @@
   "ratesNever": {
     "message": "Tasas no cargadas"
   },
+  "cryptoRatesUpdated": {
+    "message": "Cripto $1"
+  },
+  "cryptoRatesNever": {
+    "message": "Tasas cripto no cargadas"
+  },
   "ratesStale": {
     "message": "Las tasas pueden estar desactualizadas"
   },

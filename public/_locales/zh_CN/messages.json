@@ -44,6 +44,12 @@
   "ratesNever": {
     "message": "汇率未加载"
   },
+  "cryptoRatesUpdated": {
+    "message": "加密货币 $1"
+  },
+  "cryptoRatesNever": {
+    "message": "加密货币汇率未加载"
+  },
   "ratesStale": {
     "message": "汇率可能已过期"
   },

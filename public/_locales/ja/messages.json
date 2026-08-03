@@ -44,6 +44,12 @@
   "ratesNever": {
     "message": "レート未取得"
   },
+  "cryptoRatesUpdated": {
+    "message": "暗号資産 $1"
+  },
+  "cryptoRatesNever": {
+    "message": "暗号資産レート未取得"
+  },
   "ratesStale": {
     "message": "レートが古い可能性があります"
   },
