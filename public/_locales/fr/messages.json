@@ -33,7 +33,7 @@
     "message": "Bitcoin et autres cryptos"
   },
   "cryptoEnabledHelp": {
-    "message": "Ajoute 24 cryptos. Leurs taux viennent de api.coingecko.com, un second hôte contacté uniquement tant que ceci est activé, environ une fois par heure."
+    "message": "Ajoute 24 cryptos. Taux via api.coingecko.com, contacté chaque heure tant que ceci est activé."
   },
   "cryptoDenied": {
     "message": "La crypto reste désactivée sans accès à api.coingecko.com."
@@ -123,7 +123,7 @@
     "message": "Délai de survol"
   },
   "hoverDelayHelp": {
-    "message": "Temps d’immobilité du curseur avant l’apparition de l’infobulle. Plus long, moins d’infobulles qui clignotent pendant la lecture."
+    "message": "Immobilité du curseur avant l’infobulle. Plus long, moins de clignotements."
   },
   "delayInstant": {
     "message": "Immédiat"
@@ -147,13 +147,13 @@
     "message": "Réécrire les prix dans la page"
   },
   "inlineModeHelp": {
-    "message": "Affiche votre devise à côté de chaque prix, sans survol. Le survol ouvre toujours la liste complète."
+    "message": "Votre devise à côté de chaque prix, sans survol. Le survol ouvre la liste."
   },
   "pageContext": {
     "message": "Lire $$, kr et ¥ selon le pays du site"
   },
   "pageContextHelp": {
-    "message": "Sur un domaine .ca, $$ vaut dollar canadien ; sur .no, kr vaut couronne norvégienne. Désactivé, ils valent toujours USD et SEK."
+    "message": "Sur .ca, $$ vaut dollar canadien. Désactivé, $$ et kr valent USD et SEK."
   },
   "enabledEverywhere": {
     "message": "Activé"
@@ -204,13 +204,13 @@
     "message": "Politique de confidentialité"
   },
   "privacyNote": {
-    "message": "PriceHover contacte un seul hôte, open.er-api.com, pour les taux de change. Rien sur les pages que vous visitez ne quitte votre navigateur."
+    "message": "Un seul hôte pour les taux, open.er-api.com. Vos pages ne quittent pas le navigateur."
   },
   "welcomeTitle": {
     "message": "PriceHover est prêt"
   },
   "welcomeBody": {
-    "message": "Choisissez votre devise ci-dessous, puis survolez un prix sur n’importe quelle page."
+    "message": "Choisissez votre devise, puis survolez un prix."
   },
   "welcomeDismiss": {
     "message": "Compris"

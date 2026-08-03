@@ -33,7 +33,7 @@
     "message": "Bitcoin e outras criptos"
   },
   "cryptoEnabledHelp": {
-    "message": "Adiciona 24 criptoativos. As taxas vêm de api.coingecko.com, um segundo host contatado apenas enquanto isto estiver ativo, cerca de uma vez por hora."
+    "message": "Adiciona 24 criptos. Taxas de api.coingecko.com, contatado a cada hora só com isto ativo."
   },
   "cryptoDenied": {
     "message": "As criptos continuam desativadas sem acesso a api.coingecko.com."
@@ -123,7 +123,7 @@
     "message": "Atraso ao passar o cursor"
   },
   "hoverDelayHelp": {
-    "message": "Quanto tempo o cursor deve ficar parado antes de a dica aparecer. Mais tempo, menos dicas piscando durante a leitura."
+    "message": "Tempo parado antes da dica aparecer. Mais tempo, menos piscadas."
   },
   "delayInstant": {
     "message": "Instantâneo"
@@ -147,13 +147,13 @@
     "message": "Reescrever os preços na página"
   },
   "inlineModeHelp": {
-    "message": "Mostra sua moeda ao lado de cada preço, sem passar o cursor. O cursor ainda abre a lista completa."
+    "message": "Sua moeda ao lado de cada preço, sem cursor. O cursor abre a lista."
   },
   "pageContext": {
     "message": "Ler $$, kr e ¥ conforme o país do site"
   },
   "pageContextHelp": {
-    "message": "Em um domínio .ca, $$ significa dólar canadense; em .no, kr significa coroa norueguesa. Desligado, sempre valem USD e SEK."
+    "message": "Em .ca, $$ é dólar canadense. Desligado, $$ e kr valem USD e SEK."
   },
   "enabledEverywhere": {
     "message": "Ativado"
@@ -204,13 +204,13 @@
     "message": "Política de privacidade"
   },
   "privacyNote": {
-    "message": "O PriceHover contata apenas um host, open.er-api.com, para as taxas de câmbio. Nada sobre as páginas que você visita sai do seu navegador."
+    "message": "Um host para as taxas, open.er-api.com. Suas páginas não saem do navegador."
   },
   "welcomeTitle": {
     "message": "O PriceHover está pronto"
   },
   "welcomeBody": {
-    "message": "Escolha sua moeda abaixo e passe o cursor sobre qualquer preço."
+    "message": "Escolha sua moeda e passe o cursor sobre um preço."
   },
   "welcomeDismiss": {
     "message": "Entendi"

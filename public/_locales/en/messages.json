@@ -33,7 +33,7 @@
     "message": "Bitcoin and other crypto"
   },
   "cryptoEnabledHelp": {
-    "message": "Adds 24 crypto assets. Crypto rates come from api.coingecko.com, a second host contacted only while this is on, about once an hour."
+    "message": "Adds 24 assets. Rates from api.coingecko.com, contacted hourly only while this is on."
   },
   "cryptoDenied": {
     "message": "Crypto stays off without access to api.coingecko.com."
@@ -123,7 +123,7 @@
     "message": "Hover delay"
   },
   "hoverDelayHelp": {
-    "message": "How still the pointer must be before the tooltip appears. Longer means fewer tooltips flashing past while you read."
+    "message": "Pointer stillness before the tooltip opens. Longer means fewer flashing past."
   },
   "delayInstant": {
     "message": "Instant"
@@ -147,13 +147,13 @@
     "message": "Rewrite prices in the page"
   },
   "inlineModeHelp": {
-    "message": "Shows your currency next to every price, without hovering. Hovering still opens the full list."
+    "message": "Your currency beside every price, no hover needed. Hover still opens the list."
   },
   "pageContext": {
     "message": "Read $$, kr and ¥ from the site’s country"
   },
   "pageContextHelp": {
-    "message": "On a .ca domain $$ means Canadian dollars, on a .no domain kr means Norwegian krone. Off, they always mean USD and SEK."
+    "message": "On .ca, $$ is Canadian. Off, $$ and kr always mean USD and SEK."
   },
   "enabledEverywhere": {
     "message": "Enabled"
@@ -204,13 +204,13 @@
     "message": "Privacy policy"
   },
   "privacyNote": {
-    "message": "PriceHover contacts one host, open.er-api.com, for exchange rates. Nothing about the pages you visit ever leaves your browser."
+    "message": "One host for rates, open.er-api.com. What you browse never leaves your browser."
   },
   "welcomeTitle": {
     "message": "PriceHover is ready"
   },
   "welcomeBody": {
-    "message": "Pick your currency below, then hover any price on any page."
+    "message": "Pick your currency, then hover a price."
   },
   "welcomeDismiss": {
     "message": "Got it"

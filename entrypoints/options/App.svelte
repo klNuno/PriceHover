@@ -614,7 +614,7 @@
   .welcome {
     display: flex; align-items: center; gap: 16px;
     padding: 14px 16px; margin-bottom: 22px;
-    border: 1px solid var(--border); border-left: 3px solid var(--green);
+    border: 1px solid var(--border);
     border-radius: var(--radius-md); background: var(--surface);
     box-shadow: var(--shadow);
   }

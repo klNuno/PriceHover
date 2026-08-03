@@ -33,7 +33,7 @@
     "message": "比特币及其他加密货币"
   },
   "cryptoEnabledHelp": {
-    "message": "添加 24 种加密资产。汇率来自 api.coingecko.com，仅在此项开启时约每小时连接一次。"
+    "message": "添加 24 种加密资产。汇率来自 api.coingecko.com，仅在开启时每小时连接一次。"
   },
   "cryptoDenied": {
     "message": "未获得 api.coingecko.com 的访问权限时，加密货币保持关闭。"
@@ -123,7 +123,7 @@
     "message": "悬停延迟"
   },
   "hoverDelayHelp": {
-    "message": "指针需静止多久才显示提示框。时间越长，阅读时闪烁的提示越少。"
+    "message": "提示框出现前指针需静止的时间。越长，闪烁越少。"
   },
   "delayInstant": {
     "message": "立即"
@@ -147,13 +147,13 @@
     "message": "直接改写页面中的价格"
   },
   "inlineModeHelp": {
-    "message": "无需悬停即在每个价格旁显示你的货币。悬停仍会打开完整列表。"
+    "message": "无需悬停即显示你的货币。悬停仍会打开列表。"
   },
   "pageContext": {
     "message": "根据网站所属国家解读 $$、kr 和 ¥"
   },
   "pageContextHelp": {
-    "message": "在 .ca 域名上 $$ 表示加元，在 .no 上 kr 表示挪威克朗。关闭后一律视为 USD 和 SEK。"
+    "message": "在 .ca 上 $$ 表示加元。关闭后 $$ 和 kr 一律视为 USD 和 SEK。"
   },
   "enabledEverywhere": {
     "message": "已启用"
@@ -204,13 +204,13 @@
     "message": "隐私政策"
   },
   "privacyNote": {
-    "message": "PriceHover 只连接 open.er-api.com 获取汇率。你访问过的页面信息绝不会离开浏览器。"
+    "message": "仅连接 open.er-api.com 获取汇率。你浏览的内容不会离开浏览器。"
   },
   "welcomeTitle": {
     "message": "PriceHover 已就绪"
   },
   "welcomeBody": {
-    "message": "在下方选择你的货币，然后将鼠标悬停在任意价格上。"
+    "message": "选择货币，然后悬停在价格上。"
   },
   "welcomeDismiss": {
     "message": "知道了"

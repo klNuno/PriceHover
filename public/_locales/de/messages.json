@@ -33,7 +33,7 @@
     "message": "Bitcoin und andere Kryptos"
   },
   "cryptoEnabledHelp": {
-    "message": "Fügt 24 Kryptowerte hinzu. Deren Kurse stammen von api.coingecko.com, einem zweiten Host, der nur bei aktivierter Option kontaktiert wird, etwa einmal pro Stunde."
+    "message": "Fügt 24 Kryptowerte hinzu. Kurse von api.coingecko.com, stündlich nur bei aktivierter Option."
   },
   "cryptoDenied": {
     "message": "Krypto bleibt ohne Zugriff auf api.coingecko.com deaktiviert."
@@ -123,7 +123,7 @@
     "message": "Verzögerung beim Überfahren"
   },
   "hoverDelayHelp": {
-    "message": "Wie lange der Zeiger stillstehen muss, bevor der Tooltip erscheint. Länger heißt weniger aufblitzende Tooltips beim Lesen."
+    "message": "Ruhezeit des Zeigers vor dem Tooltip. Länger heißt weniger Aufblitzen."
   },
   "delayInstant": {
     "message": "Sofort"
@@ -147,13 +147,13 @@
     "message": "Preise auf der Seite ersetzen"
   },
   "inlineModeHelp": {
-    "message": "Zeigt Ihre Währung neben jedem Preis, ohne Überfahren. Der Tooltip zeigt weiterhin die ganze Liste."
+    "message": "Ihre Währung neben jedem Preis, ohne Überfahren. Der Tooltip zeigt die Liste."
   },
   "pageContext": {
     "message": "$$, kr und ¥ nach dem Land der Website lesen"
   },
   "pageContextHelp": {
-    "message": "Auf einer .ca-Domain heißt $$ kanadischer Dollar, auf .no heißt kr norwegische Krone. Aus bedeutet immer USD und SEK."
+    "message": "Auf .ca ist $$ kanadisch. Aus heißen $$ und kr immer USD und SEK."
   },
   "enabledEverywhere": {
     "message": "Aktiviert"
@@ -204,13 +204,13 @@
     "message": "Datenschutzerklärung"
   },
   "privacyNote": {
-    "message": "PriceHover kontaktiert genau einen Host, open.er-api.com, für Wechselkurse. Nichts über die von Ihnen besuchten Seiten verlässt den Browser."
+    "message": "Ein Host für Kurse, open.er-api.com. Ihre Seiten verlassen den Browser nicht."
   },
   "welcomeTitle": {
     "message": "PriceHover ist bereit"
   },
   "welcomeBody": {
-    "message": "Wählen Sie unten Ihre Währung und fahren Sie über einen beliebigen Preis."
+    "message": "Währung wählen, dann über einen Preis fahren."
   },
   "welcomeDismiss": {
     "message": "Verstanden"
