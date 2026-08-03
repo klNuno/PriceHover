@@ -303,7 +303,7 @@
         <strong>{t('welcomeTitle')}</strong>
         <p>{t('welcomeBody')}</p>
       </div>
-      <button type="button" onclick={() => (showWelcome = false)}>{t('welcomeDismiss')}</button>
+      <button class="primary" type="button" onclick={() => (showWelcome = false)}>{t('welcomeDismiss')}</button>
     </div>
   {/if}
 
@@ -432,7 +432,7 @@
           bind:value={addSite}
           oninput={() => (siteError = '')}
         />
-        <button type="submit">{t('add')}</button>
+        <button class="primary" type="submit">{t('add')}</button>
       </form>
       {#if siteError}
         <p class="field-error" id="add-site-error" role="alert">{siteError}</p>
@@ -541,31 +541,48 @@
 <style>
   :global(*) { box-sizing: border-box; margin: 0; padding: 0; }
 
+  /*
+   * Three surfaces, not two. The page, the card that sits on it, and the
+   * controls inside the card each need their own value, or a card outlined at
+   * 1px on the same background as the page reads as a stray border rather than
+   * as a container.
+   */
   :global(:root) {
-    --bg: #ffffff;
-    --bg2: #f5f5f5;
-    --bg3: #ebebeb;
-    --fg: #111111;
-    --fg2: #616161;
-    --border: #e0e0e0;
-    --green: #1a8c2a;
-    --warn: #9a6410;
+    --bg: #f6f6f7;
+    --surface: #ffffff;
+    --surface2: #f1f1f4;
+    --surface3: #e7e7ec;
+    --fg: #17171a;
+    --fg2: #6b6b76;
+    --border: #e3e3e8;
+    --border-strong: #cdcdd5;
+    --green: #17803d;
+    --warn: #92610f;
     --focus: #2b6cff;
     --danger: #c0392b;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 10px 26px -16px rgb(0 0 0 / 0.16);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.08);
+    --radius: 14px;
+    --radius-md: 10px;
+    --radius-sm: 8px;
     color-scheme: light dark;
   }
   @media (prefers-color-scheme: dark) {
     :global(:root) {
-      --bg: #111111;
-      --bg2: #1a1a1a;
-      --bg3: #242424;
-      --fg: #f0f0f0;
-      --fg2: #8f8f8f;
-      --border: #2a2a2a;
+      --bg: #0e0e10;
+      --surface: #171719;
+      --surface2: #202024;
+      --surface3: #2b2b32;
+      --fg: #ececf0;
+      --fg2: #9a9aa6;
+      --border: #26262c;
+      --border-strong: #37373f;
       --green: #5fcc6f;
       --warn: #e0a23c;
       --focus: #6ea0ff;
       --danger: #ef7a6d;
+      --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -18px rgb(0 0 0 / 0.8);
+      --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     }
   }
 
@@ -575,46 +592,67 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     font-size: 14px;
     line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
   }
 
-  main { max-width: 900px; margin: 0 auto; padding: 28px 20px 60px; }
+  /* Every hover and toggle in here animates; none of them may animate for a
+     reader who asked the OS to stop. */
+  @media (prefers-reduced-motion: reduce) {
+    :global(*) { transition: none !important; }
+  }
 
-  header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 20px; }
-  h1 { font-size: 20px; font-weight: 700; }
-  .version { font-size: 12px; color: var(--fg2); }
+  main { max-width: 980px; margin: 0 auto; padding: 36px 20px 72px; }
+
+  header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 22px; }
+  h1 { font-size: 23px; font-weight: 680; letter-spacing: -0.015em; }
+  .version {
+    font-size: 11px; font-weight: 600; color: var(--fg2);
+    padding: 2px 8px; border: 1px solid var(--border);
+    border-radius: 999px; background: var(--surface);
+  }
 
   .welcome {
     display: flex; align-items: center; gap: 16px;
-    padding: 12px 14px; margin-bottom: 20px;
+    padding: 14px 16px; margin-bottom: 22px;
     border: 1px solid var(--border); border-left: 3px solid var(--green);
-    border-radius: 6px; background: var(--bg2);
+    border-radius: var(--radius-md); background: var(--surface);
+    box-shadow: var(--shadow);
   }
+  .welcome strong { font-size: 14px; }
   .welcome p { font-size: 13px; color: var(--fg2); }
-  .welcome button { margin-left: auto; }
+  .welcome button { margin-left: auto; flex-shrink: 0; }
 
-  .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; align-items: start; }
-  .col { display: flex; flex-direction: column; gap: 18px; }
+  .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(370px, 1fr)); gap: 20px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 20px; }
 
   section {
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    background: var(--bg);
+    border-radius: var(--radius);
+    padding: 20px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
   }
-  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg2); margin-bottom: 12px; }
+  h2 {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.075em; color: var(--fg2);
+    padding-bottom: 12px; margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
 
-  .field { margin-bottom: 18px; }
+  .field { margin-bottom: 22px; }
   .field:last-child { margin-bottom: 0; }
-  label, .label { display: block; font-weight: 600; font-size: 13px; }
-  .help { font-size: 12px; color: var(--fg2); margin: 2px 0 8px; }
+  label, .label { display: block; font-weight: 620; font-size: 13.5px; letter-spacing: -0.005em; }
+  .help { font-size: 12.5px; color: var(--fg2); line-height: 1.45; margin: 3px 0 10px; }
 
   .select-row { display: flex; align-items: center; gap: 8px; }
   select, input[type='text'] {
     flex: 1; min-width: 0;
-    background: var(--bg2); color: var(--fg);
-    border: 1px solid var(--border); border-radius: 5px;
-    padding: 6px 8px; font: inherit; font-size: 13px;
+    background: var(--surface2); color: var(--fg);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 8px 10px; font: inherit; font-size: 13px;
+    transition: border-color 0.12s, background 0.12s;
   }
+  select:hover, input[type='text']:hover { border-color: var(--border-strong); }
   select:focus, input:focus { outline: 2px solid var(--focus); outline-offset: -1px; }
 
   .flag { width: 20px; height: 15px; object-fit: cover; border-radius: 2px; flex-shrink: 0; }
@@ -627,57 +665,127 @@
   ul { list-style: none; }
 
   .chosen li, .sites li, .available button {
-    display: flex; align-items: center; gap: 8px;
-    padding: 5px 8px; width: 100%;
-    border: 1px solid transparent; border-radius: 5px;
-    background: var(--bg2); color: inherit; font: inherit; text-align: left;
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px; width: 100%;
+    border: 1px solid transparent; border-radius: var(--radius-sm);
+    background: var(--surface2); color: inherit; font: inherit; text-align: left;
+    transition: background 0.12s, border-color 0.12s;
   }
-  .chosen li { margin-bottom: 4px; }
-  .sites li { margin-bottom: 4px; }
-  .available { max-height: 220px; overflow-y: auto; margin-top: 6px; scrollbar-width: thin; }
+  .chosen li { margin-bottom: 5px; }
+  .sites li { margin-bottom: 5px; }
+  .chosen li:hover, .sites li:hover { border-color: var(--border); }
+  /* The filter is the width of the list it filters, not of its own text. */
+  .filter { width: 100%; flex: none; }
+  .available {
+    max-height: 268px; overflow-y: auto; margin-top: 8px; padding-right: 4px;
+    scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent;
+    /* The last row fades instead of being sliced, which is what says "there is
+       more" without a scrollbar having to be visible to say it. */
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  }
   .available li { margin-bottom: 3px; }
   .available button { cursor: pointer; background: transparent; }
-  .available button:hover { background: var(--bg2); }
+  .available button:hover { background: var(--surface2); border-color: var(--border); }
+  .available button:hover .plus { color: var(--fg); }
   .available button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
-  .code { font-weight: 600; font-size: 12px; min-width: 34px; }
-  .name, .host { color: var(--fg2); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .plus { color: var(--fg2); font-size: 14px; }
-  .muted { color: var(--fg2); font-size: 12px; padding: 5px 8px; }
+  .code {
+    font-weight: 680; font-size: 12px; min-width: 38px;
+    font-variant-numeric: tabular-nums; letter-spacing: 0.01em;
+  }
+  .name, .host { color: var(--fg2); font-size: 12.5px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plus { color: var(--fg2); font-size: 15px; line-height: 1; transition: color 0.12s; }
+  .muted { color: var(--fg2); font-size: 12.5px; padding: 7px 10px; }
 
   button {
-    font: inherit; font-size: 12px;
-    color: var(--fg); background: var(--bg2);
-    border: 1px solid var(--border); border-radius: 5px;
-    padding: 5px 10px; cursor: pointer;
+    font: inherit; font-size: 12.5px; font-weight: 600;
+    color: var(--fg); background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    padding: 7px 13px; cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
   }
-  button:hover:not(:disabled) { border-color: var(--fg2); }
+  button:hover:not(:disabled) { background: var(--surface2); border-color: var(--fg2); }
   button:disabled { opacity: 0.4; cursor: default; }
   button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-  button.icon { padding: 2px 7px; background: transparent; border-color: transparent; color: var(--fg2); }
-  button.icon:hover:not(:disabled) { background: var(--bg3); color: var(--fg); }
-  button.danger { color: var(--danger); border-color: var(--danger); background: transparent; margin-top: 12px; }
+  /* One filled button per card at most: the thing that card is for. */
+  button.primary { background: var(--fg); color: var(--surface); border-color: var(--fg); }
+  button.primary:hover:not(:disabled) { background: var(--fg); border-color: var(--fg); opacity: 0.86; }
+  button.icon {
+    padding: 3px 8px; background: transparent; border-color: transparent;
+    color: var(--fg2); font-size: 13px;
+  }
+  button.icon:hover:not(:disabled) { background: var(--surface3); border-color: transparent; color: var(--fg); }
+  button.danger { color: var(--danger); border-color: var(--danger); background: transparent; margin-top: 14px; }
+  button.danger:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); color: var(--surface); }
 
-  .switch { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; cursor: pointer; }
-  .switch input { width: 15px; height: 15px; accent-color: var(--green); cursor: pointer; }
+  .switch { display: flex; align-items: center; gap: 10px; font-weight: 620; font-size: 13.5px; cursor: pointer; }
+  /*
+   * A drawn track rather than `accent-color` on a native box. The native
+   * control is a checkbox, and every one of these settings is a thing that is
+   * on or off right now, which is what a switch says and a checkbox does not.
+   */
+  .switch input {
+    appearance: none; -webkit-appearance: none;
+    position: relative; flex: none; margin: 0;
+    width: 34px; height: 20px; border-radius: 999px;
+    background: var(--surface3); border: 1px solid var(--border-strong);
+    cursor: pointer; transition: background 0.16s, border-color 0.16s;
+  }
+  .switch input::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #ffffff; box-shadow: var(--shadow-sm);
+    transition: translate 0.16s ease;
+  }
+  .switch input:checked { background: var(--green); border-color: var(--green); }
+  .switch input:checked::after { translate: 14px 0; }
+  .switch input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-  .segments { display: flex; flex-wrap: wrap; gap: 4px; }
-  .segments button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  /* One track holding its options, so the group reads as one control with a
+     current value rather than as a row of unrelated buttons. */
+  .segments {
+    display: inline-flex; flex-wrap: wrap; gap: 2px;
+    padding: 3px; border: 1px solid var(--border);
+    border-radius: var(--radius-md); background: var(--surface2);
+  }
+  .segments button {
+    background: transparent; border-color: transparent; color: var(--fg2);
+    border-radius: 7px; padding: 5px 11px;
+  }
+  .segments button:hover:not(.on) { background: var(--surface3); border-color: transparent; color: var(--fg); }
+  .segments button.on {
+    background: var(--surface); color: var(--fg);
+    border-color: var(--border); box-shadow: var(--shadow-sm);
+  }
 
-  .sample { margin-top: 6px; font-size: 12px; color: var(--green); font-weight: 600; }
+  .sample {
+    margin-top: 10px; padding: 8px 11px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface2); color: var(--fg);
+    font-size: 12.5px; font-weight: 620; font-variant-numeric: tabular-nums;
+  }
 
-  .add-site { display: flex; gap: 6px; margin-top: 8px; }
-  .field-error { margin-top: 6px; font-size: 12px; color: var(--danger); }
+  .add-site { display: flex; gap: 8px; margin-top: 10px; }
+  .field-error { margin-top: 8px; font-size: 12.5px; color: var(--danger); }
 
-  .reset-warning { margin-top: 12px; font-size: 12px; color: var(--danger); }
-  .reset-row { display: flex; gap: 6px; margin-top: 12px; }
+  .reset-warning { margin-top: 14px; font-size: 12.5px; color: var(--danger); }
+  .reset-row { display: flex; gap: 8px; margin-top: 14px; }
   .reset-row button { margin-top: 0; }
 
-  .rates-row { display: flex; align-items: center; gap: 10px; font-size: 13px; margin-bottom: 10px; }
+  .rates-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; margin-bottom: 12px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface2); font-size: 13px;
+  }
   .rates-row span { margin-right: auto; color: var(--fg2); }
-  .warn { color: var(--warn); }
+  .warn { color: var(--warn); font-weight: 620; }
 
-  a { color: var(--focus); font-size: 12px; }
+  a { color: var(--focus); font-size: 12.5px; font-weight: 600; text-underline-offset: 2px; }
 
-  .err { margin-top: 16px; padding: 8px 10px; border: 1px solid var(--danger); border-radius: 6px; color: var(--danger); font-size: 12px; }
+  .err {
+    margin-top: 18px; padding: 10px 12px;
+    border: 1px solid var(--danger); border-radius: var(--radius-sm);
+    background: var(--surface); color: var(--danger); font-size: 12.5px;
+  }
 </style>
