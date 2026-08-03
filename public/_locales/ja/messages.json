@@ -33,7 +33,7 @@
     "message": "ビットコインなどの暗号資産"
   },
   "cryptoEnabledHelp": {
-    "message": "24種類の暗号資産を追加します。レートは api.coingecko.com から取得し、この設定が有効な間だけ、1時間に1回程度接続します。"
+    "message": "24種類の暗号資産を追加。レートは api.coingecko.com から、有効な間だけ毎時取得します。"
   },
   "cryptoDenied": {
     "message": "api.coingecko.com へのアクセスがない場合、暗号資産は無効のままです。"
@@ -123,7 +123,7 @@
     "message": "ホバー遅延"
   },
   "hoverDelayHelp": {
-    "message": "ツールチップが出るまでカーソルを静止させる時間。長くすると読書中の点滅が減ります。"
+    "message": "ツールチップが出るまでの静止時間。長いほど点滅が減ります。"
   },
   "delayInstant": {
     "message": "即時"
@@ -147,13 +147,13 @@
     "message": "ページ内の価格を書き換える"
   },
   "inlineModeHelp": {
-    "message": "ホバーせずに各価格の横へ自国通貨を表示します。ホバーすれば全一覧が開きます。"
+    "message": "ホバーなしで各価格の横に自国通貨を表示。ホバーで一覧が開きます。"
   },
   "pageContext": {
     "message": "サイトの国に応じて $$・kr・¥ を解釈する"
   },
   "pageContextHelp": {
-    "message": ".ca ドメインでは $$ をカナダドル、.no では kr をノルウェークローネと解釈します。オフの場合は常に USD と SEK です。"
+    "message": ".ca では $$ をカナダドルと解釈。オフなら $$ と kr は常に USD と SEK です。"
   },
   "enabledEverywhere": {
     "message": "有効"
@@ -204,13 +204,13 @@
     "message": "プライバシーポリシー"
   },
   "privacyNote": {
-    "message": "PriceHover が通信する相手は為替レートの open.er-api.com ただ一つです。閲覧したページの情報がブラウザーの外に出ることはありません。"
+    "message": "レート取得先は open.er-api.com のみ。閲覧内容がブラウザーの外に出ることはありません。"
   },
   "welcomeTitle": {
     "message": "PriceHover の準備ができました"
   },
   "welcomeBody": {
-    "message": "下で自国通貨を選び、任意の価格にカーソルを合わせてください。"
+    "message": "通貨を選び、価格にカーソルを合わせてください。"
   },
   "welcomeDismiss": {
     "message": "わかりました"
