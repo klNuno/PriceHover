@@ -44,6 +44,12 @@
   "ratesNever": {
     "message": "Kurse nicht geladen"
   },
+  "cryptoRatesUpdated": {
+    "message": "Krypto $1"
+  },
+  "cryptoRatesNever": {
+    "message": "Krypto-Kurse nicht geladen"
+  },
   "ratesStale": {
     "message": "Kurse möglicherweise veraltet"
   },

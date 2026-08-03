@@ -49,6 +49,12 @@ export const STORAGE = {
   /** Pre-1.4.0 flat currency list. Read once, for migration. */
   CURRENCIES: 'selectedCurrencies',
   SETTINGS: 'settings',
+  /**
+   * Set once the first-run banner has been dismissed. Deliberately outside the
+   * settings object: it is not a preference, and resetting the settings must not
+   * bring a first-run greeting back.
+   */
+  WELCOME_SEEN: 'welcomeSeen',
 } as const;
 
 export const DEFAULT_CURRENCIES = ['EUR', 'USD', 'GBP'];

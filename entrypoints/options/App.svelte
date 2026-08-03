@@ -7,17 +7,20 @@
   import { formatCurrencyAmount } from '../../src/formatter';
   import { t, uiLocale } from '../../src/i18n';
   import { MESSAGE, send } from '../../src/messages';
+  import type { RefreshResult } from '../../src/messages';
   import {
     HOVER_DELAY_CHOICES, defaultSettings, parseHostnameInput, readSettings, updateSettings,
     watchSettings,
   } from '../../src/settings';
   import type { Rounding, Settings, SettingsPatch } from '../../src/settings';
   import { formatAgo } from '../../src/time';
-  import { STALE_AFTER_MS, STORAGE } from '../../src/types';
+  import { CRYPTO_STALE_AFTER_MS, STALE_AFTER_MS, STORAGE } from '../../src/types';
 
   let settings = $state<Settings>(defaultSettings());
   let ratesTimestamp = $state(0);
+  let cryptoTimestamp = $state(0);
   let refreshing = $state(false);
+  let cryptoRefreshing = $state(false);
   let error = $state('');
   let siteError = $state('');
   let addSite = $state('');
@@ -39,9 +42,12 @@
     // constant in the HTML.
     document.documentElement.lang = uiLocale();
 
-    // The background opens this page with #welcome on a fresh install, so the
-    // banner needs no storage flag of its own.
-    showWelcome = location.hash === '#welcome';
+    // The background opens this page with #welcome on a fresh install. The hash
+    // is consumed here rather than read: left in the URL, it brought the banner
+    // back on every reload of the same tab. Whether it is really a first run is
+    // settled below, against the flag the dismiss button writes.
+    const firstRun = location.hash === '#welcome';
+    if (firstRun) history.replaceState(null, '', location.pathname + location.search);
 
     // Subscribed before the first await, for two reasons: a write landing while
     // we read would fire into no listener, and a tab closed that fast would run
@@ -56,9 +62,12 @@
         canSave = true;
         if (error === t('loadFailed')) error = '';
       });
-      // This tab outlives a background refresh, so the rates label cannot be
+      // This tab outlives a background refresh, so the rates labels cannot be
       // read once and left.
-      unwatchRates = watchRatesTimestamp((next) => (ratesTimestamp = next));
+      unwatchRates = watchTimestamps((key, next) => {
+        if (key === STORAGE.RATES_TS) ratesTimestamp = next;
+        else cryptoTimestamp = next;
+      });
     } catch (e) {
       console.error('[PH] cannot watch storage', e);
     }
@@ -73,9 +82,14 @@
     loaded = true;
 
     try {
-      const stored = await chrome.storage.local.get([STORAGE.RATES_TS]);
+      const stored = await chrome.storage.local.get([
+        STORAGE.RATES_TS, STORAGE.CRYPTO_TS, STORAGE.WELCOME_SEEN,
+      ]);
       const ts = stored?.[STORAGE.RATES_TS];
+      const cryptoTs = stored?.[STORAGE.CRYPTO_TS];
       if (!ratesTimestamp) ratesTimestamp = typeof ts === 'number' ? ts : 0;
+      if (!cryptoTimestamp) cryptoTimestamp = typeof cryptoTs === 'number' ? cryptoTs : 0;
+      showWelcome = firstRun && !stored?.[STORAGE.WELCOME_SEEN];
     } catch (e) {
       console.error('[PH] rates timestamp read failed', e);
     }
@@ -89,14 +103,27 @@
   // this page, and the switch would sit there saying "on".
   const unwatchCrypto = watchCryptoRevoked(() => { cryptoGranted = false; });
 
-  function watchRatesTimestamp(onChange: (timestamp: number) => void): () => void {
+  function watchTimestamps(onChange: (key: string, timestamp: number) => void): () => void {
     const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, areaName) => {
-      if (areaName !== 'local' || !changes[STORAGE.RATES_TS]) return;
-      const next = changes[STORAGE.RATES_TS].newValue;
-      onChange(typeof next === 'number' ? next : 0);
+      if (areaName !== 'local') return;
+      for (const key of [STORAGE.RATES_TS, STORAGE.CRYPTO_TS]) {
+        if (!changes[key]) continue;
+        const next = changes[key].newValue;
+        onChange(key, typeof next === 'number' ? next : 0);
+      }
     };
     chrome.storage.onChanged.addListener(listener);
     return () => chrome.storage.onChanged.removeListener(listener);
+  }
+
+  /**
+   * The banner is a first-run greeting, not a preference, so the flag lives
+   * beside the rates rather than in the settings object: a reset must not bring
+   * a greeting back, and a storage failure here costs nothing worth reporting.
+   */
+  function dismissWelcome(): void {
+    showWelcome = false;
+    chrome.storage.local.set({ [STORAGE.WELCOME_SEEN]: true }).catch(() => {});
   }
 
   /**
@@ -158,6 +185,10 @@
       }
       error = '';
       await update({ cryptoEnabled: true }, () => { box.checked = false; });
+      // The hourly tick may be an hour away and the content script only asks
+      // when a page shows a price, so without this the rates row that just
+      // appeared would sit at "not loaded" with nothing having gone wrong.
+      if (settings.cryptoEnabled) await refreshCrypto();
     });
   }
 
@@ -214,6 +245,26 @@
     ratesTimestamp = result.timestamp ?? Date.now();
   }
 
+  /**
+   * Its own button, and not out of symmetry: the two rates come from two hosts
+   * on two clocks, so one failing says nothing about the other, and a single
+   * button would have to report a result that is only half true.
+   *
+   * `skipped` means the background declined to ask, which at this point can only
+   * be the permission having gone away behind our back. Re-reading it puts the
+   * switch back in step instead of blaming the network.
+   */
+  async function refreshCrypto(): Promise<void> {
+    cryptoRefreshing = true;
+    const result = await send<RefreshResult>(MESSAGE.REFRESH_CRYPTO);
+    cryptoRefreshing = false;
+
+    if (result?.skipped) { cryptoGranted = await hasCryptoAccess(); return; }
+    if (!result?.ok) { error = t('refreshFailed'); return; }
+    error = '';
+    cryptoTimestamp = result.timestamp ?? Date.now();
+  }
+
   /** Two steps on purpose: one stray click used to take the whole paused-site list with it. */
   function confirmReset(): void {
     confirmingReset = false;
@@ -245,14 +296,15 @@
       .filter((c): c is NonNullable<typeof c> => c !== undefined)
   );
 
+  /** The settings key says what was asked for; only the browser says what is held. */
+  const cryptoUsable = $derived(settings.cryptoEnabled && cryptoGranted);
+
   const availableCurrencies = $derived.by(() => {
     const chosen = new Set([settings.baseCurrency, ...settings.targetCurrencies]);
     const filter = currencyFilter.trim().toLowerCase();
     // Crypto joins the picker only once the host permission is actually held.
     // Offering a row the extension cannot price is offering nothing.
-    const pool = settings.cryptoEnabled && cryptoGranted
-      ? [...CURRENCIES, ...CRYPTO_ASSETS]
-      : CURRENCIES;
+    const pool = cryptoUsable ? [...CURRENCIES, ...CRYPTO_ASSETS] : CURRENCIES;
     return pool.filter(
       (c) =>
         !chosen.has(c.code) &&
@@ -263,6 +315,15 @@
   const stale = $derived(ratesTimestamp > 0 && Date.now() - ratesTimestamp > STALE_AFTER_MS);
   const ratesLabel = $derived(
     ratesTimestamp === 0 ? t('ratesNever') : t('ratesUpdated', formatAgo(ratesTimestamp))
+  );
+
+  // Hourly source, hourly patience: six hours old is stale here where two days
+  // is still fresh for a fiat rate.
+  const cryptoStale = $derived(
+    cryptoTimestamp > 0 && Date.now() - cryptoTimestamp > CRYPTO_STALE_AFTER_MS
+  );
+  const cryptoLabel = $derived(
+    cryptoTimestamp === 0 ? t('cryptoRatesNever') : t('cryptoRatesUpdated', formatAgo(cryptoTimestamp))
   );
 
   // Rounding is hard to describe and trivial to demonstrate.
@@ -303,7 +364,7 @@
         <strong>{t('welcomeTitle')}</strong>
         <p>{t('welcomeBody')}</p>
       </div>
-      <button class="primary" type="button" onclick={() => (showWelcome = false)}>{t('welcomeDismiss')}</button>
+      <button class="primary" type="button" onclick={dismissWelcome}>{t('welcomeDismiss')}</button>
     </div>
   {/if}
 
@@ -396,7 +457,7 @@
         <label class="switch">
           <input
             type="checkbox"
-            checked={settings.cryptoEnabled && cryptoGranted}
+            checked={cryptoUsable}
             onchange={(e) => toggleCrypto(e.currentTarget)}
           />
           <span>{t('cryptoEnabled')}</span>
@@ -510,6 +571,17 @@
           {refreshing ? t('refreshing') : t('refresh')}
         </button>
       </div>
+      <!-- Two hosts, two clocks, two buttons. One row covering both would have
+           to pick a timestamp, and the older one is the only honest choice,
+           which then reports the crypto host as down when the fiat one is. -->
+      {#if cryptoUsable}
+        <div class="rates-row">
+          <span class:warn={cryptoStale}>{cryptoLabel}</span>
+          <button type="button" onclick={refreshCrypto} disabled={cryptoRefreshing}>
+            {cryptoRefreshing ? t('refreshing') : t('refresh')}
+          </button>
+        </div>
+      {/if}
       <p class="help">{t('privacyNote')}</p>
       <p>
         <a href="https://klnuno.github.io/PriceHover/PRIVACY" target="_blank" rel="noreferrer">
@@ -778,8 +850,13 @@
     border: 1px solid var(--border); border-radius: var(--radius-sm);
     background: var(--surface2); font-size: 13px;
   }
+  /* Two rates rows are one group, so they sit closer to each other than to
+     whatever follows them. */
+  .rates-row + .rates-row { margin-top: -4px; }
   .rates-row span { margin-right: auto; color: var(--fg2); }
-  .warn { color: var(--warn); font-weight: 620; }
+  /* Qualified, and it has to be: `.rates-row span` outranks a bare `.warn`, so
+     the stale label rendered in the same grey as a fresh one and warned nobody. */
+  .rates-row span.warn { color: var(--warn); font-weight: 620; }
 
   a { color: var(--focus); font-size: 12.5px; font-weight: 600; text-underline-offset: 2px; }
 

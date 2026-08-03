@@ -92,6 +92,26 @@ async function refreshIfStale(): Promise<void> {
   if (Math.abs(Date.now() - lastCrypto) > CRYPTO_CACHE_MS) await refreshCryptoRates();
 }
 
+/**
+ * Reloading an unpacked extension fires `onInstalled` with reason `install`
+ * every single time, so the reason alone opened a greeting tab on every reload
+ * during development, and reopening the same tab replayed the banner from the
+ * hash. The flag the banner writes is the authority. A genuine reinstall drops
+ * the profile's storage with it, so a real first run still gets its tab.
+ */
+async function openWelcome(): Promise<void> {
+  const stored = await chrome.storage.local.get(STORAGE.WELCOME_SEEN).catch(() => null);
+  if (stored?.[STORAGE.WELCOME_SEEN]) return;
+
+  // `openOptionsPage` takes no URL, and the welcome banner needs the hash to
+  // know it is a first run rather than a normal visit.
+  try {
+    await chrome.tabs.create({ url: chrome.runtime.getURL('options.html#welcome') });
+  } catch {
+    try { chrome.runtime.openOptionsPage(); } catch { /* not available everywhere */ }
+  }
+}
+
 async function setBadge(enabled: boolean): Promise<void> {
   try {
     await chrome.action.setBadgeText({ text: enabled ? '' : 'off' });
@@ -120,15 +140,7 @@ export default defineBackground(() => {
     // A fresh install lands on the options page. Without it the extension gives
     // no sign it exists beyond an icon, and everything it does depends on the
     // user having said which currency is theirs.
-    if (details.reason === 'install') {
-      // `openOptionsPage` takes no URL, and the welcome banner needs the hash to
-      // know it is a first run rather than a normal visit.
-      try {
-        chrome.tabs.create({ url: chrome.runtime.getURL('options.html#welcome') });
-      } catch {
-        try { chrome.runtime.openOptionsPage(); } catch { /* not available everywhere */ }
-      }
-    }
+    if (details.reason === 'install') openWelcome().catch(() => {});
   });
 
   chrome.runtime.onStartup?.addListener(() => {
