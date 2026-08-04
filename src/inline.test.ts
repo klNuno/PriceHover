@@ -1,6 +1,26 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!globalThis.document) GlobalRegistrator.register();
 
+/**
+ * happy-dom (20.11.1) holds a MutationObserver's callback behind a `WeakRef`
+ * and keeps no strong reference to it, so a garbage collection stops delivering
+ * records to a live observer. That is what made three of these tests fail about
+ * one run in six, and always the ones that mutate the page after the first
+ * pass: the annotator's observer had been collected out from under them.
+ *
+ * Keeping every referent alive removes the collection, and with it the flake.
+ * It is scoped to this file and says nothing about the extension, which runs
+ * against a browser's own implementation.
+ */
+const keptAlive = new Set<object>();
+const NativeWeakRef = globalThis.WeakRef;
+globalThis.WeakRef = class<T extends object> extends NativeWeakRef<T> {
+  constructor(target: T) {
+    super(target);
+    keptAlive.add(target);
+  }
+} as typeof WeakRef;
+
 import { afterEach, describe, expect, test } from 'bun:test';
 import { setCryptoDetection } from './detector';
 import { createInlineAnnotator, INLINE_ATTR } from './inline';
@@ -34,18 +54,39 @@ function mount(
   return annotator;
 }
 
-/** The annotator works in idle slices; two macrotasks is enough for one pass. */
-const flush = async (): Promise<void> => {
-  for (let i = 0; i < 4; i++) await new Promise((resolve) => setTimeout(resolve, 20));
-};
-
 const badges = (): string[] =>
   [...document.querySelectorAll(`[${INLINE_ATTR}]`)].map((el) => el.textContent ?? '');
+
+/**
+ * The annotator works in idle slices, and how many of them a pass takes is a
+ * property of the machine, not of the code under test. Given the badges a pass
+ * should end on, this returns as soon as they are there and gives a loaded
+ * runner up to three seconds to get there.
+ *
+ * Without them it waits for the badges to stop changing instead, which is the
+ * only thing available when the expectation is that nothing happens.
+ */
+const flush = async (expected?: string[]): Promise<void> => {
+  const target = expected?.join('|');
+  let previous = '';
+  let stable = 0;
+  for (let i = 0; i < 150; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const current = badges().join('|');
+    if (target !== undefined) {
+      if (current === target) return;
+      continue;
+    }
+    stable = current === previous ? stable + 1 : 0;
+    previous = current;
+    if (stable >= 4) return;
+  }
+};
 
 describe('inline annotation', () => {
   test('appends the base currency beside a price', async () => {
     mount('<p>Only $10.00</p>').scan(document.body);
-    await flush();
+    await flush(['(€9.00)']);
     expect(badges()).toEqual(['(€9.00)']);
   });
 
@@ -68,7 +109,7 @@ describe('inline annotation', () => {
 
   test('leaves the site’s own text untouched', async () => {
     mount('<p id="p">Only $10.00</p>').scan(document.body);
-    await flush();
+    await flush(['(€9.00)']);
     // Rewriting a price in place would destroy information the user may need;
     // the badge only ever sits next to it.
     const text = document.querySelector('#p')!.firstChild as Text;
@@ -90,7 +131,7 @@ describe('inline annotation', () => {
     // Markup indentation puts a newline after nearly every price; the badge
     // still goes after the whole node, so nothing is split.
     mount('<p id="p">\n  $10.00\n</p>').scan(document.body);
-    await flush();
+    await flush(['(€9.00)']);
     expect(badges()).toEqual(['(€9.00)']);
     expect((document.querySelector('#p')!.firstChild as Text).data).toBe('\n  $10.00\n');
   });
@@ -111,7 +152,7 @@ describe('inline annotation', () => {
 
   test('annotates every eligible node, in document order', async () => {
     mount('<p><span>Was $20.00</span><span>, now $10.00</span></p>').scan(document.body);
-    await flush();
+    await flush(['(€18.00)', '(€9.00)']);
     expect(badges()).toEqual(['(€18.00)', '(€9.00)']);
   });
 
@@ -122,7 +163,7 @@ describe('inline annotation', () => {
       <div contenteditable="true">$10.00</div>
       <p>$10.00</p>
     `).scan(document.body);
-    await flush();
+    await flush(['(€9.00)']);
     expect(badges()).toEqual(['(€9.00)']);
   });
 
@@ -130,7 +171,6 @@ describe('inline annotation', () => {
     // The badge contains a price. Without the marker check the observer would
     // annotate it, then annotate that, forever.
     mount('<p>$10.00</p>').scan(document.body);
-    await flush();
     await flush();
     expect(badges()).toHaveLength(1);
   });
@@ -141,7 +181,7 @@ describe('inline annotation', () => {
     await flush();
 
     document.querySelector('#host')!.innerHTML = '<span>$10.00</span>';
-    await flush();
+    await flush(['(€9.00)']);
     expect(badges()).toEqual(['(€9.00)']);
   });
 
@@ -151,11 +191,11 @@ describe('inline annotation', () => {
     // price, and then a second one beside that.
     const instance = mount('<p id="p">$10.00</p>');
     instance.scan(document.body);
-    await flush();
+    await flush(['(€9.00)']);
     expect(badges()).toEqual(['(€9.00)']);
 
     document.querySelector('#p')!.textContent = '$20.00';
-    await flush();
+    await flush(['(€18.00)']);
     expect(badges()).toEqual(['(€18.00)']);
   });
 
@@ -172,7 +212,7 @@ describe('inline annotation', () => {
   test('destroy leaves the page as it was found', async () => {
     const instance = mount('<p id="p">Only $10.00</p>');
     instance.scan(document.body);
-    await flush();
+    await flush(['(€9.00)']);
     expect(badges()).toHaveLength(1);
 
     instance.destroy();
@@ -189,20 +229,19 @@ describe('inline annotation', () => {
     const instance = mount(`<div id="bulk">${bulk}</div>`);
     instance.scan(document.body);
     await flush();
-    await flush();
     expect(badges().length).toBeGreaterThanOrEqual(600);
 
     document.querySelector('#bulk')!.remove();
     expect(badges()).toEqual([]);
 
     document.body.insertAdjacentHTML('beforeend', '<p id="late">$10.00</p>');
-    await flush();
+    await flush(['(€9.00)']);
     expect(badges()).toEqual(['(€9.00)']);
   });
 
   test('honours the rounding setting', async () => {
     mount('<p>$10.50</p>', { rounding: 'integer' }).scan(document.body);
-    await flush();
+    await flush(['(≈€9)']);
     expect(badges()).toEqual(['(≈€9)']);
   });
 });
