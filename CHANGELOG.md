@@ -26,6 +26,14 @@ LINK, DOT, LTC, BCH, XLM, SHIB, UNI, ATOM, ETC, NEAR, APT, FIL.
 - Prices written in crypto are read on the page too, for BTC, ETH, XMR, USDT, USDC, DOGE, XRP, LTC, BCH and the `₿` and `Ξ` glyphs. The other fourteen assets convert but are not tokens: `ATOM`, `LINK`, `NEAR`, `ETC` and friends are ordinary words in an all-caps heading, and `SOL` is the Peruvian sol.
 - Crypto is a target, not a base currency.
 
+### Settings
+
+- The page was redrawn. Cards on a surface, real toggles instead of the browser's checkboxes, and the segmented controls read as one control rather than a row of buttons.
+- The help text under each setting says the same thing in about half the words.
+- The greeting shown on first run came back on every reload. Dismissing it now sticks.
+- With crypto on, the crypto rates get their own line under About, with their own refresh button. They come from a different host on a different clock, so a single button could not honestly report both.
+- The "rates may be out of date" warning is finally coloured. It rendered in the same grey as a fresh label, which is a warning nobody saw.
+
 ## 2.0.0
 
 The major bump is for the reading change, not the feature list: a `$` price on
