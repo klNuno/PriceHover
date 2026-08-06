@@ -1,6 +1,6 @@
 {
   "name": "pricehover",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Browser extension that converts prices on hover",
   "license": "GPL-3.0-or-later",
   "private": true,

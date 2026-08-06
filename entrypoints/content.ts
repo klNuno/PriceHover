@@ -502,8 +502,24 @@ export default defineContentScript({
       if (delay <= 0) { arm(target, x, y); return; }
       hoverTimer = setTimeout(() => {
         hoverTimer = null;
-        if (target.isConnected) arm(target, x, y);
+        // Where the pointer is now, not where it crossed the border. Those are
+        // the same point only when the element is no wider than its text: enter
+        // a 220 px table cell from the left, stop on the 74 px price inside it,
+        // and the entry point is 28 px of empty margin away from the price. The
+        // tooltip then waited for a mousemove that never came, because the
+        // pointer had already stopped where the user wanted it.
+        if (target.isConnected) arm(target, lastPointer.x, lastPointer.y);
       }, delay);
+    }
+
+    /**
+     * The only thing that runs on every pointer move whether or not anything is
+     * armed, and it is two numbers: the hover delay above reads them when it
+     * fires. `onMouseMove` cannot do this job, since it is attached by `arm` and
+     * so is absent for the whole delay.
+     */
+    function trackPointer(e: MouseEvent): void {
+      lastPointer = { x: e.clientX, y: e.clientY };
     }
 
     function onMouseMove(e: MouseEvent): void {
@@ -629,6 +645,7 @@ export default defineContentScript({
     function startListening(): void {
       if (listening) return;
       listening = true;
+      document.addEventListener('mousemove', trackPointer, { passive: true });
       document.addEventListener('mouseover', onMouseOver, { passive: true });
       document.addEventListener('mouseout', onMouseOut, { passive: true });
       document.addEventListener('selectionchange', onSelectionChange, { passive: true });
@@ -640,6 +657,7 @@ export default defineContentScript({
     function stopListening(): void {
       if (!listening) return;
       listening = false;
+      document.removeEventListener('mousemove', trackPointer);
       document.removeEventListener('mouseover', onMouseOver);
       document.removeEventListener('mouseout', onMouseOut);
       document.removeEventListener('selectionchange', onSelectionChange);

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.1
+
+- A page could hand the same price to every element on it. Schema.org markup is trusted over any regex, and rightly so, but the price was read out of the enclosing `itemscope` no matter how far away it sat. SteamDB puts one `itemscope` on `<body>` with a single `<meta itemprop="price">`, so hovering anything at all, the word "Sales" in the site header included, reported the app's price in a currency nothing on screen was written in. The annotation is now only trusted when it sits on the hovered element's own line of descent.
+- A price in a wide container did not always answer. The hover delay judged the point where the pointer crossed into the element, not where it came to rest: enter a 220 px table cell through the empty margin, settle on the 74 px price inside it, and nothing was ever shown, because the decision had already been taken 28 px away. It now reads where the pointer actually is.
+
 ## 2.1.0
 
 ### Sub-cent prices were being rounded into wrong ones

@@ -48,6 +48,39 @@ describe('semantic detection', () => {
     expect(detectPricesFromElement(el)).toEqual([]);
   });
 
+  test('a page-wide itemscope does not price every element on the page', () => {
+    // SteamDB marks up <body itemscope> with one <meta itemprop="price"> for
+    // the app. Reading that meta for any element under it turned every word on
+    // the page into the same price: hovering the site header's "Sales" link
+    // reported the game's cost.
+    document.body.innerHTML = `
+      <meta itemprop="priceCurrency" content="USD">
+      <meta itemprop="price" content="39.99">
+      <nav><a id="link">Sales</a></nav>
+      <table><tr><td id="cell">Rp 479000</td></tr></table>`;
+    document.body.setAttribute('itemscope', '');
+    try {
+      expect(detectPricesFromElement(document.querySelector('#link')!)).toEqual([]);
+      const cell = detectPricesFromElement(document.querySelector('#cell')!);
+      expect(cell.map((p) => [p.amount, p.currencyCode])).toEqual([[479000, 'IDR']]);
+    } finally {
+      document.body.removeAttribute('itemscope');
+    }
+  });
+
+  test('an offer container still prices the element that holds it', () => {
+    // The rule is descent, not distance: hovering the container of a real Offer
+    // has to keep working, and the price sits inside it.
+    const el = target(
+      `<div id="offer" itemscope itemtype="https://schema.org/Offer">
+         <meta itemprop="priceCurrency" content="JPY">
+         <span itemprop="price" content="24800">Twenty-four thousand</span>
+       </div>`,
+      '#offer'
+    );
+    expect(detectPricesFromElement(el)).toEqual([{ amount: 24800, currencyCode: 'JPY' }]);
+  });
+
   test('falls through to the regex when the markup is incomplete', () => {
     // A price with no currency annotation must not shadow the text detector.
     const el = target(`<div itemscope><span itemprop="price" content="30">¥1980</span></div>`, 'span');

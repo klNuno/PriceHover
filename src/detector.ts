@@ -518,6 +518,8 @@ function trySemanticDetection(element: Element): DetectedPrice | null {
 
   const readValue = (target: Element): string =>
     (target.getAttribute('content') ?? target.textContent ?? '').trim();
+  /** One contains the other: the price annotates this element, not a distant one. */
+  const inLine = (node: Element): boolean => element.contains(node) || node.contains(element);
   const digitsOnly = (value: string): string | null =>
     value.replace(/[^\d.,]/g, '') || null;
 
@@ -538,8 +540,17 @@ function trySemanticDetection(element: Element): DetectedPrice | null {
     // The lookup is scoped to the itemscope container so it stays cheap.
     if (el.hasAttribute('itemscope')) {
       if (rawAmount === null) {
+        // The amount has to sit on this element's own line of descent. An
+        // itemscope can be the entire page (SteamDB puts one on <body>), and
+        // then a subtree query answers with the page's headline price for every
+        // element on it: hovering the word "Sales" in the site header reported
+        // the game's price, in a currency nothing on screen was written in.
+        //
+        // The currency below is deliberately not held to the same rule. Real
+        // markup puts it in a sibling <meta>, and a currency without an amount
+        // cannot invent a price on its own.
         const node = el.querySelector('[itemprop="price"]');
-        if (node) rawAmount = digitsOnly(readValue(node));
+        if (node && inLine(node)) rawAmount = digitsOnly(readValue(node));
       }
       if (currencyCode === null) {
         const node = el.querySelector('[itemprop="priceCurrency"]');
