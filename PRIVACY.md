@@ -41,13 +41,12 @@ you chose to pause, and nothing else is ever written to storage.
 
 | Permission | Why |
 |---|---|
-| Access to page content on all sites (`content_scripts: <all_urls>`) | A price can be on any page, so the detector has to run on any page. It reads text and, in inline mode, appends a label next to a price. It never sends page data anywhere. Your browser may describe this as "read and change all your data on all websites", which is the standard wording for any content script. |
+| Access to page content on all sites (`<all_urls>`, on the content script and in `host_permissions`) | A price can be on any page, so the detector has to run on any page. It reads text and, in inline mode, appends a label next to a price. It never sends page data anywhere. Your browser may describe this as "read and change all your data on all websites", which is the standard wording for any content script. It is also what lets the popup name the site you are on, so the pause switch can name it. |
 | `storage` | Keep your settings between sessions. |
-| `activeTab` | Show the current site's name in the popup so the pause switch can name it. Granted for one tab, only at the moment you click the extension icon, and never at rest. |
 | `open.er-api.com` host access | Fetch exchange rates. The only network destination the extension has by default. |
 | `api.coingecko.com` host access | **Optional, not granted at install.** Fetch crypto rates, and only while you have crypto conversion switched on. Turning the switch off gives the permission back. |
 
-The extension deliberately does **not** ask for `tabs`, `alarms`,
+The extension deliberately does **not** ask for `tabs`, `activeTab`, `alarms`,
 `clipboardWrite`, `webRequest`, `history`, or `cookies`.
 
 ## Network requests

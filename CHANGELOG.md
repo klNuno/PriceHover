@@ -2,22 +2,31 @@
 
 ## 2.2.0
 
-### Firefox ran on one tab at a time, and only after a click
+### The extension ran on one tab at a time, and only after a click
 
-`<all_urls>` was declared on the content script and nowhere else. Chrome grants
-a declared content script its origins at install; Firefox treats them as a
-permission the user hands over, and with an empty `host_permissions` there was
-nothing to hand over. The extension then only ran on the tab whose toolbar icon
-had just been clicked, which reads exactly like a broken install: no tooltip
-anywhere, until clicking the icon "unlocked" the page it was on. Firefox builds
-now ask for `<all_urls>`, which is what they were already doing.
+No tooltip anywhere, no rewritten price anywhere, until the toolbar icon was
+clicked, and then only on that one tab. It reads exactly like a broken install,
+and it had been that way since 1.4.0.
 
-Declaring it is only half of it. Firefox remembers the answer per extension id
-and carries it across reinstalls, so a profile that already said "only when
-clicked" keeps saying it to every new build, and a manifest cannot argue. The
-settings page now notices, says so, and has a button that asks for the access
-directly. Pages already open still need a reload afterwards: a content script
-is never injected into a tab that was loaded before the grant.
+The cause was `activeTab`, added in 1.4.0 to give the popup the current tab's
+URL for the per-site pause switch. It is described everywhere as the permission
+that costs nothing, and at rest it does. What it also does is put the extension
+into the click-to-grant model in both browsers' site-access UI, and a content
+script declared on `<all_urls>` then waits for a click it should never have
+needed. 1.2.4 asked for `storage` alone and ran everywhere.
+
+So `activeTab` is gone, and `<all_urls>` is a host permission on both browsers.
+That is granted at install rather than per click, and it buys nothing the
+content script was not already declared on: the install warning is the same
+sentence it has always been. The popup keeps its URL, because `tabs.query`
+returns one for a tab the extension already has access to.
+
+Firefox also remembers the answer per extension id and carries it across
+reinstalls, so a profile that was once set to "only when clicked" keeps saying
+it to every new build, and a manifest cannot argue. The settings page now
+notices, says so, and has a button that asks for the access directly. Pages
+already open still need a reload afterwards: a content script is never injected
+into a tab that was loaded before the grant.
 
 ### Inline mode can show your currency instead of the page's
 

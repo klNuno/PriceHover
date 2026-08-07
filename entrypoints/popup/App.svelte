@@ -83,8 +83,10 @@
 
     cryptoGranted = await hasCryptoAccess();
 
-    // `activeTab` gives the URL only because the user just clicked the icon,
-    // which is exactly the gesture that should unlock a per-site switch.
+    // `tabs.query` needs no `tabs` permission to run; it only returns `url` for
+    // a tab the extension already has host access to, which is what
+    // `<all_urls>` is for. A tab it may not read comes back without one, and
+    // the per-site switch stays hidden rather than pointing at the wrong site.
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.url) {
@@ -93,7 +95,7 @@
           hostname = normalizeHostname(url.hostname);
         }
       }
-    } catch { /* no activeTab grant, or an internal page */ }
+    } catch { /* no host access for that tab, or an internal page */ }
   });
 
   onDestroy(() => { unwatch?.(); unwatchCrypto?.(); });

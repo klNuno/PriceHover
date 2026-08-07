@@ -123,9 +123,9 @@ async function setBadge(enabled: boolean): Promise<void> {
 
 /**
  * The only sign of the master switch when the popup is closed. Per-site pausing
- * is deliberately absent from the badge: naming the active tab outside a click
- * on the icon would cost a `tabs` permission, and `activeTab` grants nothing at
- * rest, which is the whole reason it shows no install warning.
+ * is deliberately absent from the badge: following the active tab would cost a
+ * `tabs` permission and a listener that wakes the worker on every navigation,
+ * to redraw two pixels nobody is looking at.
  */
 async function syncBadge(): Promise<void> {
   const settings = await loadSettings().catch(() => null);

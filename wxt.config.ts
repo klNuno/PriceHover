@@ -17,23 +17,21 @@ export default defineConfig({
     default_locale: 'en',
     // version is intentionally absent: WXT takes it from package.json, which
     // keeps a single source of truth. The popup reads it back from the manifest.
-    // `activeTab` is what makes the per-site pause switch possible: it hands the
-    // popup the current tab's URL, and only because the user just clicked the
-    // extension icon. It grants nothing at rest and shows no install warning.
-    permissions: ['storage', 'activeTab'],
-    // `<all_urls>` is asked for on Firefox and nowhere else, and it buys nothing
-    // this extension did not already do: the content script is declared on
-    // `<all_urls>` for every browser. Chrome grants a declared content script
-    // its origins at install; Firefox treats them as a permission the user has
-    // to hand over, and with nothing in `host_permissions` there is nothing for
-    // it to hand over at install time. The extension then falls back to running
-    // only on the tab whose toolbar icon was just clicked, which reads exactly
-    // like a broken install: no tooltip anywhere, until a click on the icon
-    // "unlocks" the page it is on.
-    host_permissions: [
-      ...(browser === 'firefox' ? ['<all_urls>'] : []),
-      'https://open.er-api.com/*',
-    ],
+    // No `activeTab`. It looks free, and it is the reason the extension spent
+    // three versions doing nothing until its icon was clicked: an extension
+    // that asks for it is an extension whose access is granted per click, and
+    // both browsers hand it that model in their site-access UI. The declared
+    // content script then waits for a click it should never have needed.
+    // v1.2.4 asked for `storage` alone and ran everywhere; this is that.
+    permissions: ['storage'],
+    // `<all_urls>` buys nothing the content script was not already declared on,
+    // and it is what makes the grant happen at install instead of per click.
+    // Firefox treats content-script matches as a permission the user hands
+    // over, and with nothing here there was nothing to hand over at install
+    // time. Chrome reads it as "on all sites" rather than "on click". The
+    // install warning is unchanged either way: a content script on `<all_urls>`
+    // already says "read and change all your data on all websites".
+    host_permissions: ['<all_urls>', 'https://open.er-api.com/*'],
     // Optional, and off until the user turns crypto on from the options page.
     // Declaring the capability is not using it: nothing is requested, and
     // nothing is contacted, for a profile that never opts in. That is what

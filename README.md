@@ -91,7 +91,7 @@ PriceHover contacts exactly one host, `open.er-api.com`, and asks it one
 question: today's exchange rates. That request carries nothing about you or the
 page you are on. Prices are detected on your machine, flags are bundled in the
 extension, and there is no analytics, no telemetry and no identifier. Three
-permissions: `storage`, `activeTab` and access to `open.er-api.com`.
+permissions: `storage`, page access on all sites, and `open.er-api.com`.
 
 Turning on crypto conversion adds a second host, `api.coingecko.com`, and
 nothing else. It is off by default, your browser asks before granting it, and
