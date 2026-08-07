@@ -50,17 +50,26 @@ describe('semantic detection', () => {
 
   test('a page-wide itemscope does not price every element on the page', () => {
     // SteamDB marks up <body itemscope> with one <meta itemprop="price"> for
-    // the app. Reading that meta for any element under it turned every word on
-    // the page into the same price: hovering the site header's "Sales" link
-    // reported the game's cost.
+    // the app. Reading that meta for anything under it turned the whole page
+    // into one price: the site header's "Sales" link, and the empty margin
+    // beside a heading, both reported the game's cost.
     document.body.innerHTML = `
       <meta itemprop="priceCurrency" content="USD">
       <meta itemprop="price" content="39.99">
       <nav><a id="link">Sales</a></nav>
+      <div id="wrapper">
+        <meta itemprop="priceCurrency" content="USD">
+        <meta itemprop="price" content="39.99">
+        <h1>Steam price history</h1>
+      </div>
       <table><tr><td id="cell">Rp 479000</td></tr></table>`;
     document.body.setAttribute('itemscope', '');
     try {
       expect(detectPricesFromElement(document.querySelector('#link')!)).toEqual([]);
+      // A container holding the meta is where the guard used to leak: it
+      // contains the annotation without being part of it, so the empty space
+      // beside the heading answered with the app's price.
+      expect(detectPricesFromElement(document.querySelector('#wrapper')!)).toEqual([]);
       const cell = detectPricesFromElement(document.querySelector('#cell')!);
       expect(cell.map((p) => [p.amount, p.currencyCode])).toEqual([[479000, 'IDR']]);
     } finally {
@@ -68,17 +77,19 @@ describe('semantic detection', () => {
     }
   });
 
-  test('an offer container still prices the element that holds it', () => {
-    // The rule is descent, not distance: hovering the container of a real Offer
-    // has to keep working, and the price sits inside it.
+  test('an offer container leaves its own printed price to the text detector', () => {
+    // Hovering the container rather than the annotated node reads no markup at
+    // all, on purpose: a container is exactly what a page-wide itemscope is.
+    // What the container prints is still detected, by the regex.
     const el = target(
       `<div id="offer" itemscope itemtype="https://schema.org/Offer">
          <meta itemprop="priceCurrency" content="JPY">
-         <span itemprop="price" content="24800">Twenty-four thousand</span>
+         <span itemprop="price" content="24800">¥24,800</span>
        </div>`,
       '#offer'
     );
-    expect(detectPricesFromElement(el)).toEqual([{ amount: 24800, currencyCode: 'JPY' }]);
+    const found = detectPricesFromElement(el);
+    expect(found.map((p) => [p.amount, p.currencyCode])).toEqual([[24800, 'JPY']]);
   });
 
   test('falls through to the regex when the markup is incomplete', () => {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.2
+
+- The page-wide `itemscope` fix from 2.1.1 only closed half the hole. Requiring the price to sit on the hovered element's line of descent still let every container that *encloses* the annotation claim it, and on a page whose `<body>` carries the `itemscope` that is most of the page: the empty space beside the "Steam price history" heading on SteamDB kept answering `$39.99`. An enclosing `itemscope` is now searched only when the hovered element carries part of the annotation itself, which is what the release before 2.0.0 did before the subtree lookup was added.
+
 ## 2.1.1
 
 - A page could hand the same price to every element on it. Schema.org markup is trusted over any regex, and rightly so, but the price was read out of the enclosing `itemscope` no matter how far away it sat. SteamDB puts one `itemscope` on `<body>` with a single `<meta itemprop="price">`, so hovering anything at all, the word "Sales" in the site header included, reported the app's price in a currency nothing on screen was written in. The annotation is now only trusted when it sits on the hovered element's own line of descent.

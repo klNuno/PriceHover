@@ -523,9 +523,17 @@ function trySemanticDetection(element: Element): DetectedPrice | null {
   const digitsOnly = (value: string): string | null =>
     value.replace(/[^\d.,]/g, '') || null;
 
+  /**
+   * Whether the hovered element is itself part of the annotation, rather than
+   * merely something an itemscope happens to contain. Only then may the
+   * itemscope below be searched.
+   */
+  let annotated = false;
+
   for (let depth = 0; depth < 6 && el; depth++, el = el.parentElement) {
     if (el.hasAttribute('itemprop')) {
       const prop = el.getAttribute('itemprop');
+      if (prop === 'price' || prop === 'priceCurrency') annotated = true;
       if (prop === 'price' && rawAmount === null) rawAmount = digitsOnly(readValue(el));
       if (prop === 'priceCurrency' && currencyCode === null) {
         currencyCode = readValue(el).toUpperCase();
@@ -538,17 +546,20 @@ function trySemanticDetection(element: Element): DetectedPrice | null {
     //                  <span itemprop="price" content="24800">…</span></div>
     // Walking ancestors alone therefore finds one half and never the other.
     // The lookup is scoped to the itemscope container so it stays cheap.
-    if (el.hasAttribute('itemscope')) {
+    // Two conditions, and the first one is the whole point. An itemscope can be
+    // the entire page: SteamDB puts one on <body> with a single <meta
+    // itemprop="price"> for the app. Searching it for anything hovered under it
+    // priced the whole page, so the empty margin beside a heading reported the
+    // game's cost in a currency nothing on screen was written in. The element
+    // has to carry part of the annotation itself to be allowed to complete it,
+    // which is what an element that merely sits inside the scope does not do.
+    //
+    // Then the amount has to sit on the element's own line of descent, since a
+    // page-wide scope holds annotations for things far away from it. The
+    // currency is deliberately not held to that rule: real markup puts it in a
+    // sibling <meta>, and a currency alone cannot invent a price.
+    if (annotated && el.hasAttribute('itemscope')) {
       if (rawAmount === null) {
-        // The amount has to sit on this element's own line of descent. An
-        // itemscope can be the entire page (SteamDB puts one on <body>), and
-        // then a subtree query answers with the page's headline price for every
-        // element on it: hovering the word "Sales" in the site header reported
-        // the game's price, in a currency nothing on screen was written in.
-        //
-        // The currency below is deliberately not held to the same rule. Real
-        // markup puts it in a sibling <meta>, and a currency without an amount
-        // cannot invent a price on its own.
         const node = el.querySelector('[itemprop="price"]');
         if (node && inLine(node)) rawAmount = digitsOnly(readValue(node));
       }
