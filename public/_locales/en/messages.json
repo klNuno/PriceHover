@@ -237,7 +237,7 @@
     "message": "PriceHover cannot read pages yet"
   },
   "pageAccessBody": {
-    "message": "Your browser is only letting it run on the tab whose icon you just clicked. Grant access, then reload the tabs you already have open."
+    "message": "Your browser is holding back access to the sites you visit, so no price is detected anywhere. Grant it, then reload the tabs you already have open."
   },
   "pageAccessGrant": {
     "message": "Allow on all sites"

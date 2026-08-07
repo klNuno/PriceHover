@@ -237,7 +237,7 @@
     "message": "PriceHover ne peut pas encore lire les pages"
   },
   "pageAccessBody": {
-    "message": "Votre navigateur ne l’autorise que sur l’onglet dont vous venez de cliquer l’icône. Accordez l’accès, puis rechargez les onglets déjà ouverts."
+    "message": "Votre navigateur retient l’accès aux sites que vous visitez, donc aucun prix n’est détecté nulle part. Accordez-le, puis rechargez les onglets déjà ouverts."
   },
   "pageAccessGrant": {
     "message": "Autoriser sur tous les sites"

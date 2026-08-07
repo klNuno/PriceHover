@@ -237,7 +237,7 @@
     "message": "PriceHover kann Seiten noch nicht lesen"
   },
   "pageAccessBody": {
-    "message": "Ihr Browser erlaubt es nur im Tab, dessen Symbol Sie gerade angeklickt haben. Zugriff erteilen, dann bereits offene Tabs neu laden."
+    "message": "Ihr Browser hält den Zugriff auf die von Ihnen besuchten Websites zurück, daher wird nirgends ein Preis erkannt. Erteilen Sie ihn und laden Sie bereits offene Tabs neu."
   },
   "pageAccessGrant": {
     "message": "Auf allen Websites erlauben"

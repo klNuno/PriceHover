@@ -237,7 +237,7 @@
     "message": "PriceHover aún no puede leer las páginas"
   },
   "pageAccessBody": {
-    "message": "Tu navegador solo lo permite en la pestaña cuyo icono acabas de pulsar. Concede el acceso y recarga las pestañas ya abiertas."
+    "message": "Tu navegador está reteniendo el acceso a los sitios que visitas, así que no se detecta ningún precio. Concédelo y recarga las pestañas ya abiertas."
   },
   "pageAccessGrant": {
     "message": "Permitir en todos los sitios"

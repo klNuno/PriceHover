@@ -237,7 +237,7 @@
     "message": "O PriceHover ainda não consegue ler as páginas"
   },
   "pageAccessBody": {
-    "message": "Seu navegador só permite na aba cujo ícone você acabou de clicar. Conceda o acesso e recarregue as abas já abertas."
+    "message": "Seu navegador está retendo o acesso aos sites que você visita, então nenhum preço é detectado. Conceda o acesso e recarregue as abas já abertas."
   },
   "pageAccessGrant": {
     "message": "Permitir em todos os sites"

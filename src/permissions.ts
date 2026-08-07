@@ -18,22 +18,22 @@ const CRYPTO_PERMISSION: chrome.permissions.Permissions = {
 /**
  * The origins the content script is declared on.
  *
- * Chrome hands a declared content script its origins at install and never asks
- * again. Firefox treats them as a permission, remembers the answer per
- * extension id, and keeps that answer across reinstalls: an extension once set
- * to "only when clicked" stays that way through every new build, running on one
- * tab at a time and looking broken everywhere else. Declaring `<all_urls>` in
- * the manifest is what makes it *requestable*; this is what asks.
+ * A fresh install grants them, in both browsers. A profile that once said "only
+ * when clicked" does not, and it keeps saying it: the answer is stored per
+ * extension id and survives every new build, Chrome withholding the origins
+ * behind its site-access setting and Firefox behind its own. The extension then
+ * looks like a broken install, because a content script that is never injected
+ * has no way to say why. Declaring `<all_urls>` in the manifest is what makes
+ * it requestable; this is what asks.
  */
 const PAGE_PERMISSION: chrome.permissions.Permissions = { origins: ['<all_urls>'] };
 
 /**
- * Whether the extension may run on pages without being clicked first. Always
- * true where the question does not arise, so no caller has to know which
- * browser it is on.
+ * Whether the extension may run on pages without being clicked first. An
+ * environment with no `chrome.permissions` cannot be withholding anything, so
+ * absent reads as granted and no banner is shown over a working install.
  */
 export async function hasPageAccess(): Promise<boolean> {
-  if (!import.meta.env.FIREFOX) return true;
   try {
     return await chrome.permissions.contains(PAGE_PERMISSION);
   } catch {
