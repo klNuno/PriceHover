@@ -232,5 +232,14 @@
   },
   "welcomeDismiss": {
     "message": "わかりました"
+  },
+  "pageAccessTitle": {
+    "message": "PriceHover はまだページを読み取れません"
+  },
+  "pageAccessBody": {
+    "message": "アイコンをクリックしたタブでしか動作を許可されていません。アクセスを許可し、開いているタブを再読み込みしてください。"
+  },
+  "pageAccessGrant": {
+    "message": "すべてのサイトで許可"
   }
 }

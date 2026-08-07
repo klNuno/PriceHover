@@ -232,5 +232,14 @@
   },
   "welcomeDismiss": {
     "message": "Compris"
+  },
+  "pageAccessTitle": {
+    "message": "PriceHover ne peut pas encore lire les pages"
+  },
+  "pageAccessBody": {
+    "message": "Votre navigateur ne l’autorise que sur l’onglet dont vous venez de cliquer l’icône. Accordez l’accès, puis rechargez les onglets déjà ouverts."
+  },
+  "pageAccessGrant": {
+    "message": "Autoriser sur tous les sites"
   }
 }

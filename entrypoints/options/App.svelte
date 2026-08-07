@@ -3,7 +3,10 @@
   import { CRYPTO_ASSETS } from '../../src/crypto';
   import { ASSET_BY_CODE, CURRENCIES, CURRENCY_BY_CODE, flagToCountryCode } from '../../src/currencies';
   import { flagImage } from '../../src/flags';
-  import { dropCryptoAccess, hasCryptoAccess, requestCryptoAccess, watchCryptoRevoked } from '../../src/permissions';
+  import {
+    dropCryptoAccess, hasCryptoAccess, hasPageAccess, requestCryptoAccess, requestPageAccess,
+    watchCryptoRevoked,
+  } from '../../src/permissions';
   import { formatCurrencyAmount } from '../../src/formatter';
   import { t, uiLocale } from '../../src/i18n';
   import { MESSAGE, send } from '../../src/messages';
@@ -17,6 +20,11 @@
   import { CRYPTO_STALE_AFTER_MS, STALE_AFTER_MS, STORAGE } from '../../src/types';
 
   let settings = $state<Settings>(defaultSettings());
+  /**
+   * Whether the extension may run on a page without being clicked first. Starts
+   * true so the banner cannot flash on a browser that never asks the question.
+   */
+  let pageAccess = $state(true);
   let ratesTimestamp = $state(0);
   let cryptoTimestamp = $state(0);
   let refreshing = $state(false);
@@ -95,6 +103,7 @@
     }
 
     cryptoGranted = await hasCryptoAccess();
+    pageAccess = await hasPageAccess();
   });
 
   onDestroy(() => { unwatch?.(); unwatchRates?.(); unwatchCrypto?.(); });
@@ -124,6 +133,19 @@
   function dismissWelcome(): void {
     showWelcome = false;
     chrome.storage.local.set({ [STORAGE.WELCOME_SEEN]: true }).catch(() => {});
+  }
+
+  /**
+   * Straight from the click, with nothing awaited first: the browser only
+   * honours a permission request while the gesture is still in hand.
+   *
+   * Refusing is an answer, not a failure, so the banner simply stays. The pages
+   * already open still need a reload either way, since a content script is not
+   * injected into a tab that was loaded before the grant.
+   */
+  async function grantPageAccess(): Promise<void> {
+    const granted = await requestPageAccess();
+    if (granted) pageAccess = true;
   }
 
   /**
@@ -375,6 +397,16 @@
         <p>{t('welcomeBody')}</p>
       </div>
       <button class="primary" type="button" onclick={dismissWelcome}>{t('welcomeDismiss')}</button>
+    </div>
+  {/if}
+
+  {#if !pageAccess}
+    <div class="welcome warn-card">
+      <div>
+        <strong>{t('pageAccessTitle')}</strong>
+        <p>{t('pageAccessBody')}</p>
+      </div>
+      <button class="primary" type="button" onclick={grantPageAccess}>{t('pageAccessGrant')}</button>
     </div>
   {/if}
 
@@ -725,6 +757,9 @@
   .welcome strong { font-size: 14px; }
   .welcome p { font-size: 13px; color: var(--fg2); }
   .welcome button { margin-left: auto; flex-shrink: 0; }
+  /* Nothing works until this one is dealt with, so it does not look optional. */
+  .warn-card { border-color: var(--warn); }
+  .warn-card strong { color: var(--warn); }
 
   .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(370px, 1fr)); gap: 20px; align-items: start; }
   .col { display: flex; flex-direction: column; gap: 20px; }

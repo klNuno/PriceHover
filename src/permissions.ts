@@ -15,6 +15,41 @@ const CRYPTO_PERMISSION: chrome.permissions.Permissions = {
   origins: [CRYPTO_ORIGIN_PATTERN],
 };
 
+/**
+ * The origins the content script is declared on.
+ *
+ * Chrome hands a declared content script its origins at install and never asks
+ * again. Firefox treats them as a permission, remembers the answer per
+ * extension id, and keeps that answer across reinstalls: an extension once set
+ * to "only when clicked" stays that way through every new build, running on one
+ * tab at a time and looking broken everywhere else. Declaring `<all_urls>` in
+ * the manifest is what makes it *requestable*; this is what asks.
+ */
+const PAGE_PERMISSION: chrome.permissions.Permissions = { origins: ['<all_urls>'] };
+
+/**
+ * Whether the extension may run on pages without being clicked first. Always
+ * true where the question does not arise, so no caller has to know which
+ * browser it is on.
+ */
+export async function hasPageAccess(): Promise<boolean> {
+  if (!import.meta.env.FIREFOX) return true;
+  try {
+    return await chrome.permissions.contains(PAGE_PERMISSION);
+  } catch {
+    return true;
+  }
+}
+
+/** Same gesture rule as the crypto request below: call it straight from the click. */
+export async function requestPageAccess(): Promise<boolean> {
+  try {
+    return await chrome.permissions.request(PAGE_PERMISSION);
+  } catch {
+    return false;
+  }
+}
+
 export async function hasCryptoAccess(): Promise<boolean> {
   try {
     return await chrome.permissions.contains(CRYPTO_PERMISSION);

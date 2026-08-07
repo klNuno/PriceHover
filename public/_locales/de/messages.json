@@ -232,5 +232,14 @@
   },
   "welcomeDismiss": {
     "message": "Verstanden"
+  },
+  "pageAccessTitle": {
+    "message": "PriceHover kann Seiten noch nicht lesen"
+  },
+  "pageAccessBody": {
+    "message": "Ihr Browser erlaubt es nur im Tab, dessen Symbol Sie gerade angeklickt haben. Zugriff erteilen, dann bereits offene Tabs neu laden."
+  },
+  "pageAccessGrant": {
+    "message": "Auf allen Websites erlauben"
   }
 }

@@ -12,6 +12,13 @@ had just been clicked, which reads exactly like a broken install: no tooltip
 anywhere, until clicking the icon "unlocked" the page it was on. Firefox builds
 now ask for `<all_urls>`, which is what they were already doing.
 
+Declaring it is only half of it. Firefox remembers the answer per extension id
+and carries it across reinstalls, so a profile that already said "only when
+clicked" keeps saying it to every new build, and a manifest cannot argue. The
+settings page now notices, says so, and has a button that asks for the access
+directly. Pages already open still need a reload afterwards: a content script
+is never injected into a tab that was loaded before the grant.
+
 ### Inline mode can show your currency instead of the page's
 
 A second choice under "Rewrite prices in the page": both prices, as before, or

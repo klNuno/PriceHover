@@ -498,6 +498,32 @@ const MESSAGES: Record<string, Entry> = {
     en: 'Got it', fr: 'Compris', es: 'Entendido', de: 'Verstanden',
     pt_BR: 'Entendi', it: 'Ho capito', ja: 'わかりました', zh_CN: '知道了',
   },
+  pageAccessTitle: {
+    en: 'PriceHover cannot read pages yet',
+    fr: 'PriceHover ne peut pas encore lire les pages',
+    es: 'PriceHover aún no puede leer las páginas',
+    de: 'PriceHover kann Seiten noch nicht lesen',
+    pt_BR: 'O PriceHover ainda não consegue ler as páginas',
+    it: 'PriceHover non può ancora leggere le pagine',
+    ja: 'PriceHover はまだページを読み取れません',
+    zh_CN: 'PriceHover 还无法读取页面',
+  },
+  pageAccessBody: {
+    en: 'Your browser is only letting it run on the tab whose icon you just clicked. Grant access, then reload the tabs you already have open.',
+    fr: 'Votre navigateur ne l’autorise que sur l’onglet dont vous venez de cliquer l’icône. Accordez l’accès, puis rechargez les onglets déjà ouverts.',
+    es: 'Tu navegador solo lo permite en la pestaña cuyo icono acabas de pulsar. Concede el acceso y recarga las pestañas ya abiertas.',
+    de: 'Ihr Browser erlaubt es nur im Tab, dessen Symbol Sie gerade angeklickt haben. Zugriff erteilen, dann bereits offene Tabs neu laden.',
+    pt_BR: 'Seu navegador só permite na aba cujo ícone você acabou de clicar. Conceda o acesso e recarregue as abas já abertas.',
+    it: 'Il browser lo consente solo nella scheda di cui hai appena cliccato l’icona. Concedi l’accesso, poi ricarica le schede già aperte.',
+    ja: 'アイコンをクリックしたタブでしか動作を許可されていません。アクセスを許可し、開いているタブを再読み込みしてください。',
+    zh_CN: '浏览器只允许它在你刚点击图标的标签页运行。授予访问权限后，请重新加载已打开的标签页。',
+  },
+  pageAccessGrant: {
+    en: 'Allow on all sites', fr: 'Autoriser sur tous les sites',
+    es: 'Permitir en todos los sitios', de: 'Auf allen Websites erlauben',
+    pt_BR: 'Permitir em todos os sites', it: 'Consenti su tutti i siti',
+    ja: 'すべてのサイトで許可', zh_CN: '在所有网站上允许',
+  },
 };
 
 const here = dirname(fileURLToPath(import.meta.url));

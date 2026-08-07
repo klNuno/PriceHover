@@ -232,5 +232,14 @@
   },
   "welcomeDismiss": {
     "message": "Ho capito"
+  },
+  "pageAccessTitle": {
+    "message": "PriceHover non può ancora leggere le pagine"
+  },
+  "pageAccessBody": {
+    "message": "Il browser lo consente solo nella scheda di cui hai appena cliccato l’icona. Concedi l’accesso, poi ricarica le schede già aperte."
+  },
+  "pageAccessGrant": {
+    "message": "Consenti su tutti i siti"
   }
 }

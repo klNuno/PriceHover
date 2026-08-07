@@ -232,5 +232,14 @@
   },
   "welcomeDismiss": {
     "message": "Entendi"
+  },
+  "pageAccessTitle": {
+    "message": "O PriceHover ainda não consegue ler as páginas"
+  },
+  "pageAccessBody": {
+    "message": "Seu navegador só permite na aba cujo ícone você acabou de clicar. Conceda o acesso e recarregue as abas já abertas."
+  },
+  "pageAccessGrant": {
+    "message": "Permitir em todos os sites"
   }
 }

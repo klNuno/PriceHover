@@ -232,5 +232,14 @@
   },
   "welcomeDismiss": {
     "message": "Got it"
+  },
+  "pageAccessTitle": {
+    "message": "PriceHover cannot read pages yet"
+  },
+  "pageAccessBody": {
+    "message": "Your browser is only letting it run on the tab whose icon you just clicked. Grant access, then reload the tabs you already have open."
+  },
+  "pageAccessGrant": {
+    "message": "Allow on all sites"
   }
 }
