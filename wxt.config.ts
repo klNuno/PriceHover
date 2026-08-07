@@ -24,20 +24,22 @@ export default defineConfig({
     // content script then waits for a click it should never have needed.
     // v1.2.4 asked for `storage` alone and ran everywhere; this is that.
     permissions: ['storage'],
-    // `<all_urls>` buys nothing the content script was not already declared on,
-    // and it is what makes the grant happen at install instead of per click.
-    // Firefox treats content-script matches as a permission the user hands
-    // over, and with nothing here there was nothing to hand over at install
-    // time. Chrome reads it as "on all sites" rather than "on click". The
-    // install warning is unchanged either way: a content script on `<all_urls>`
-    // already says "read and change all your data on all websites".
-    host_permissions: ['<all_urls>', 'https://open.er-api.com/*'],
-    // Optional, and off until the user turns crypto on from the options page.
-    // Declaring the capability is not using it: nothing is requested, and
-    // nothing is contacted, for a profile that never opts in. That is what
-    // keeps "the extension contacts exactly one host" true for everyone else,
-    // in PRIVACY.md, in the README and in the Firefox declaration below.
-    optional_host_permissions: ['https://api.coingecko.com/*'],
+    // One host, and no `<all_urls>` here on purpose. Page access comes from the
+    // content script's own `matches`, which has read `<all_urls>` since 1.0.0
+    // and is granted at install in both browsers. Repeating it here would grant
+    // nothing further and warn about nothing further; it would only make the
+    // manifest louder than the extension.
+    host_permissions: ['https://open.er-api.com/*'],
+    // Optional, and off until asked for. Crypto waits for the switch in the
+    // options page. `<all_urls>` is here so it can be *re-requested*: a profile
+    // that once set site access to "on click" withholds the content script's
+    // origins from every later build, and the settings page needs something
+    // legal to ask for to hand them back. Declaring the capability is not using
+    // it: nothing is requested, and nothing is contacted, for a profile that
+    // never opts in. That is what keeps "the extension contacts exactly one
+    // host" true, in PRIVACY.md, in the README and in the Firefox declaration
+    // below.
+    optional_host_permissions: ['<all_urls>', 'https://api.coingecko.com/*'],
     icons: {
       16: 'icons/icon-16.png',
       32: 'icons/icon-32.png',

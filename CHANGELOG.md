@@ -15,18 +15,22 @@ into the click-to-grant model in both browsers' site-access UI, and a content
 script declared on `<all_urls>` then waits for a click it should never have
 needed. 1.2.4 asked for `storage` alone and ran everywhere.
 
-So `activeTab` is gone, and `<all_urls>` is a host permission on both browsers.
-That is granted at install rather than per click, and it buys nothing the
-content script was not already declared on: the install warning is the same
-sentence it has always been. The popup keeps its URL, because `tabs.query`
-returns one for a tab the extension already has access to.
+So `activeTab` is gone and nothing replaces it. The manifest asks for exactly
+what 1.2.4 asked for: `storage`, and `open.er-api.com`. The content script has
+been declared on `<all_urls>` since 1.0.0 and that is what grants page access,
+at install, in both browsers, which is why 1.2.4 ran everywhere with no host
+permission of its own. The popup keeps the current site's name, because
+`tabs.query` needs no permission to run and returns a URL for a tab the
+extension already reaches.
 
-Firefox also remembers the answer per extension id and carries it across
-reinstalls, so a profile that was once set to "only when clicked" keeps saying
-it to every new build, and a manifest cannot argue. The settings page now
-notices, says so, and has a button that asks for the access directly. Pages
-already open still need a reload afterwards: a content script is never injected
-into a tab that was loaded before the grant.
+Both browsers remember a profile's site-access answer per extension id and
+carry it across reinstalls, so a profile that was once set to "on click" keeps
+withholding pages from every later build, and a manifest cannot argue with it.
+That state used to hide behind `activeTab`, which made a click look like it
+woke the extension up. With the crutch gone it is simply broken, so the
+settings page now notices, says so, and has a button that asks for the access
+back. Pages already open still need a reload afterwards: a content script is
+never injected into a tab that was loaded before the grant.
 
 ### Riyals, dinars and rand went unread
 
