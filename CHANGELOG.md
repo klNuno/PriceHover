@@ -28,6 +28,18 @@ notices, says so, and has a button that asks for the access directly. Pages
 already open still need a reload afterwards: a content script is never injected
 into a tab that was loaded before the grant.
 
+### Riyals, dinars and rand went unread
+
+`44.99 SR`, `3.99 KD`, `47.49 QR` and `R 199.50` are how the Gulf and South
+African storefronts print their prices, and how Steam and SteamDB list them.
+None of the four converted. `SR`, `QR` and `KD` were only read in front of the
+amount, because behind one they also match "error code 500 KD"; a bare `R` was
+only read glued to the digits, because detached it also matches "see section
+R 5". Both readings now exist, on the condition the amount is printed the way
+money is printed: a thousands group, or a full two-digit minor unit. That is the
+same bar `PHP`, `TRY`, `COP` and `CRC` have always had to clear, and it splits
+the two cleanly, since a code number is round and bare and a price is not.
+
 ### Inline mode can show your currency instead of the page's
 
 A second choice under "Rewrite prices in the page": both prices, as before, or

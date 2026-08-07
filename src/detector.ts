@@ -26,8 +26,6 @@ const both = (token: string, code: string): SymbolSpec =>
   ({ token, code, prefix: true, suffix: true, tight: false });
 const prefixOnly = (token: string, code: string): SymbolSpec =>
   ({ token, code, prefix: true, suffix: false, tight: false });
-const tightPrefix = (token: string, code: string): SymbolSpec =>
-  ({ token, code, prefix: false, suffix: false, tight: true });
 
 const SYMBOLS: SymbolSpec[] = [
   // Sign symbols, unambiguous, allowed on either side.
@@ -49,10 +47,11 @@ const SYMBOLS: SymbolSpec[] = [
   // Peru writes both forms.
   both('S/.', 'PEN'), both('S/', 'PEN'),
 
-  // Alphabetic tokens that read as a currency only in front of the amount.
-  // As a suffix they would match "error code 500 KD" or "Version 5 RM".
-  prefixOnly('Rp', 'IDR'), prefixOnly('RM', 'MYR'), prefixOnly('SR', 'SAR'),
-  prefixOnly('QR', 'QAR'), prefixOnly('KD', 'KWD'),
+  // Alphabetic tokens. In front of the amount they read as a currency on their
+  // own; behind it they need the amount to be printed like money, or they match
+  // "error code 500 KD" and "Version 5 RM". See LOOSE_NEEDS_PRICE_SHAPE.
+  prefixOnly('Rp', 'IDR'),
+  both('RM', 'MYR'), both('SR', 'SAR'), both('QR', 'QAR'), both('KD', 'KWD'),
 
   // Alphabetic tokens genuinely written on both sides. The dotted forms are how
   // Switzerland and Denmark actually print them: "Fr. 89.90", "199 kr."
@@ -60,8 +59,10 @@ const SYMBOLS: SymbolSpec[] = [
   both('kr.', 'SEK'), both('kr', 'SEK'), both('Kr', 'SEK'),
   both('zł', 'PLN'), both('Kč', 'CZK'), both('Ft', 'HUF'),
 
-  // A bare R is South African rand only when glued to the digits.
-  tightPrefix('R', 'ZAR'),
+  // A bare R glued to the digits is South African rand. Detached from them it
+  // is a letter, unless the amount is printed like money: see
+  // LOOSE_NEEDS_PRICE_SHAPE.
+  { token: 'R', code: 'ZAR', prefix: true, suffix: false, tight: true },
 
   // Every ISO 4217 code we support, uppercase only.
   ...[...CURRENCY_BY_CODE.keys()].map((code) => both(code, code)),
@@ -270,6 +271,20 @@ const CRYPTO_BARE_INTEGER = /^\d{4,}$/u;
 
 /** Tokens one character away from prose, where a lone digit means noise. */
 const NEEDS_TWO_DIGITS = new Set(['R', 'S/']);
+
+/**
+ * Readings that only hold on an amount printed the way money is printed, the
+ * same bar `AMBIGUOUS_CODES` has to clear: a thousands group, or a full
+ * two-digit minor unit.
+ *
+ * These four letters behind an amount, and a lone `R` not glued to one, are
+ * identifiers at least as often as money: "error code 500 KD", "Version 5 RM",
+ * "R 2 units". But that is how the Gulf and South African storefronts print
+ * their prices, and how Steam and SteamDB list them, so `44.99 SR`, `3.99 KD`,
+ * `47.49 QR` and `R 199.50` have to be readable. The shape is what tells the
+ * two apart: a code number is round and bare, a price is not.
+ */
+const SUFFIX_NEEDS_PRICE_SHAPE = new Set(['SR', 'QR', 'KD', 'RM']);
 const STRIPPABLE_SPACE = new RegExp(`[${SPACE_CLASS}]`, 'g');
 
 /**
@@ -362,11 +377,15 @@ function parseMatch(
   let token: string;
   let rawAmount: string;
   let side: TokenSide;
+  // Only the first branch is the one that requires the token to touch the
+  // digits, and `R` is the only token that reads differently either way.
+  let tight = false;
 
   if (match[1]) {
     token = match[1];
     rawAmount = match[2];
     side = 'before';
+    tight = true;
   } else if (match[3]) {
     token = match[3];
     rawAmount = match[4];
@@ -419,6 +438,12 @@ function parseMatch(
   // One digit behind a token this short is an identifier: "R2-D2", "Model S/ 3".
   // A real R5 loses out, which is rarer than the noise the rule keeps out.
   if (NEEDS_TWO_DIGITS.has(spec.token) && /^\d$/.test(rawAmount)) return null;
+
+  // The looser readings, and only those: a letter pair behind the amount, or an
+  // `R` that let go of its digits. Both stay off anything not shaped like money.
+  const loose =
+    side === 'after' ? SUFFIX_NEEDS_PRICE_SHAPE.has(spec.token) : spec.token === 'R' && !tight;
+  if (loose && !PRICE_SHAPED.test(rawAmount)) return null;
 
   // `$`, `kr` and `¥` mean different currencies in different markets. The page
   // resolves them; without a resolver the historical default stands.

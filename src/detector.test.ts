@@ -53,6 +53,18 @@ describe('detects real prices', () => {
     // Sub-unit prices: the trailing group of three is decimals, not thousands.
     ['$0.001', 0.001, 'USD'],
     ['€0,001', 0.001, 'EUR'],
+    // How the Gulf storefronts and Steam actually print these: the letters go
+    // behind the amount. Accepted only on a price-shaped one, which is what
+    // keeps "error code 500 KD" and "Model X 200 SR" out just below.
+    ['44.99 SR', 44.99, 'SAR'],
+    ['3.99 KD', 3.99, 'KWD'],
+    ['47.49 QR', 47.49, 'QAR'],
+    ['49.50 RM', 49.5, 'MYR'],
+    ['1,250 SR', 1250, 'SAR'],
+    // Same bar for an R that let go of its digits: `R199` needs no help,
+    // `R 199.50` does.
+    ['R 199.50', 199.5, 'ZAR'],
+    ['R 1 299,00', 1299, 'ZAR'],
   ];
 
   for (const [text, amount, code] of cases) {
@@ -63,10 +75,13 @@ describe('detects real prices', () => {
 describe('rejects prose that looks like a price', () => {
   const cases = [
     'Chapter r 10',          // bare lowercase r is not ZAR
-    'see section R 5',       // a spaced bare R is not ZAR either
-    'Version 5 RM',          // RM only reads as ringgit in front of the amount
+    'see section R 5',       // a detached R needs an amount shaped like money
+    'room R 12',
+    'revision R 1.2',        // one fraction digit is a version, not 1.20 rand
+    'Version 5 RM',          // behind the amount, these need a price shape too
     'error code 500 KD',
     'Model X 200 SR',
+    'gate 12 QR',
     'try 100 times',         // lowercase ISO codes are not currencies
     'requires php 8.2',
     'Requires PHP 8.2',      // one fraction digit after a word token
