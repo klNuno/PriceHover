@@ -155,6 +155,18 @@
   "inlineModeHelp": {
     "message": "无需悬停即显示你的货币。悬停仍会打开列表。"
   },
+  "inlineStyle": {
+    "message": "页面中显示"
+  },
+  "inlineStyleHelp": {
+    "message": "替换只是隐藏网站原价，并未删除。悬停即可再次看到。"
+  },
+  "inlineStyleBadge": {
+    "message": "两个价格"
+  },
+  "inlineStyleReplace": {
+    "message": "只显示我的"
+  },
   "pageContext": {
     "message": "根据网站所属国家解读 $$、kr 和 ¥"
   },

@@ -155,6 +155,18 @@
   "inlineModeHelp": {
     "message": "Your currency beside every price, no hover needed. Hover still opens the list."
   },
+  "inlineStyle": {
+    "message": "In the page, show"
+  },
+  "inlineStyleHelp": {
+    "message": "Replacing hides the site’s price without deleting it. Hover shows it again."
+  },
+  "inlineStyleBadge": {
+    "message": "Both prices"
+  },
+  "inlineStyleReplace": {
+    "message": "Mine only"
+  },
   "pageContext": {
     "message": "Read $$, kr and ¥ from the site’s country"
   },

@@ -405,6 +405,11 @@ export default defineContentScript({
         sources: [price],
         allConversions: [conversions],
         rounding: settings.rounding,
+        // The page still prints its own price, unless inline mode took it off
+        // the screen. Then this line is the only copy left and rounding it
+        // would lose the figure the site actually charges.
+        sourceRounding:
+          settings.inlineMode && settings.inlineStyle === 'replace' ? 'exact' : settings.rounding,
         stale: anyStale(conversions),
         x: rect.left + rect.width / 2,
         y: rect.top,

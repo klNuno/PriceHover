@@ -13,6 +13,17 @@ import { STORAGE, DEFAULT_CURRENCIES } from './types';
  */
 export type Rounding = 'exact' | 'smart' | 'integer';
 
+/**
+ * What inline mode writes into the page.
+ *
+ * `badge`:   the converted amount beside the page's own price, `Rp 479000 (€23)`.
+ * `replace`: the page's price collapsed to nothing and the converted amount in
+ *            its place. The original is never lost: it is what the tooltip
+ *            shows on top of the converted rows, and it comes back untouched
+ *            the moment the setting goes back to `badge`.
+ */
+export type InlineStyle = 'badge' | 'replace';
+
 export interface Settings {
   /** Master switch. Off means the content script does nothing at all. */
   enabled: boolean;
@@ -27,6 +38,8 @@ export interface Settings {
   rounding: Rounding;
   /** Rewrite prices in the page instead of waiting for a hover. */
   inlineMode: boolean;
+  /** What that rewrite looks like. Ignored while `inlineMode` is off. */
+  inlineStyle: InlineStyle;
   /** Resolve `$`, `kr` and `¥` using the page's domain and language. */
   usePageContext: boolean;
   /**
@@ -46,6 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hoverDelayMs: 180,
   rounding: 'smart',
   inlineMode: false,
+  inlineStyle: 'badge',
   usePageContext: true,
   cryptoEnabled: false,
 };
@@ -180,6 +194,7 @@ export function parseSettings(raw: unknown): Settings {
         ? rounding
         : DEFAULT_SETTINGS.rounding,
     inlineMode: input.inlineMode === true,
+    inlineStyle: input.inlineStyle === 'replace' ? 'replace' : DEFAULT_SETTINGS.inlineStyle,
     usePageContext: input.usePageContext !== false,
     cryptoEnabled: input.cryptoEnabled === true,
   };

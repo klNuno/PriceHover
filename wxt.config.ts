@@ -21,7 +21,19 @@ export default defineConfig({
     // popup the current tab's URL, and only because the user just clicked the
     // extension icon. It grants nothing at rest and shows no install warning.
     permissions: ['storage', 'activeTab'],
-    host_permissions: ['https://open.er-api.com/*'],
+    // `<all_urls>` is asked for on Firefox and nowhere else, and it buys nothing
+    // this extension did not already do: the content script is declared on
+    // `<all_urls>` for every browser. Chrome grants a declared content script
+    // its origins at install; Firefox treats them as a permission the user has
+    // to hand over, and with nothing in `host_permissions` there is nothing for
+    // it to hand over at install time. The extension then falls back to running
+    // only on the tab whose toolbar icon was just clicked, which reads exactly
+    // like a broken install: no tooltip anywhere, until a click on the icon
+    // "unlocks" the page it is on.
+    host_permissions: [
+      ...(browser === 'firefox' ? ['<all_urls>'] : []),
+      'https://open.er-api.com/*',
+    ],
     // Optional, and off until the user turns crypto on from the options page.
     // Declaring the capability is not using it: nothing is requested, and
     // nothing is contacted, for a profile that never opts in. That is what

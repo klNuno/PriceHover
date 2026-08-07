@@ -155,6 +155,18 @@
   "inlineModeHelp": {
     "message": "Votre devise à côté de chaque prix, sans survol. Le survol ouvre la liste."
   },
+  "inlineStyle": {
+    "message": "Dans la page, afficher"
+  },
+  "inlineStyleHelp": {
+    "message": "Le remplacement masque le prix du site sans le supprimer. Le survol le réaffiche."
+  },
+  "inlineStyleBadge": {
+    "message": "Les deux prix"
+  },
+  "inlineStyleReplace": {
+    "message": "Le mien seulement"
+  },
   "pageContext": {
     "message": "Lire $$, kr et ¥ selon le pays du site"
   },

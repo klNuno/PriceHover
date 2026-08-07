@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.2.0
+
+### Firefox ran on one tab at a time, and only after a click
+
+`<all_urls>` was declared on the content script and nowhere else. Chrome grants
+a declared content script its origins at install; Firefox treats them as a
+permission the user hands over, and with an empty `host_permissions` there was
+nothing to hand over. The extension then only ran on the tab whose toolbar icon
+had just been clicked, which reads exactly like a broken install: no tooltip
+anywhere, until clicking the icon "unlocked" the page it was on. Firefox builds
+now ask for `<all_urls>`, which is what they were already doing.
+
+### Inline mode can show your currency instead of the page's
+
+A second choice under "Rewrite prices in the page": both prices, as before, or
+only yours. Replacing does not delete anything. The site's own text stays in the
+page, unsplit and unedited, collapsed by a style on the element that holds it,
+and the tooltip shows it above the converted rows, unrounded. Turning the
+setting off puts the element's `style` attribute back exactly as it was, and so
+does a page that drops the badge on its own.
+
+It applies only where the price is the entire content of its element, which is
+what a price cell or a price tag is. A price sitting in a sentence still gets a
+badge beside it: collapsing that would take the sentence with it.
+
 ## 2.1.2
 
 - The page-wide `itemscope` fix from 2.1.1 only closed half the hole. Requiring the price to sit on the hovered element's line of descent still let every container that *encloses* the annotation claim it, and on a page whose `<body>` carries the `itemscope` that is most of the page: the empty space beside the "Steam price history" heading on SteamDB kept answering `$39.99`. An enclosing `itemscope` is now searched only when the hovered element carries part of the annotation itself, which is what the release before 2.0.0 did before the subtree lookup was added.

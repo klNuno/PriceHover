@@ -155,6 +155,18 @@
   "inlineModeHelp": {
     "message": "Tu moneda junto a cada precio, sin cursor. El cursor abre la lista."
   },
+  "inlineStyle": {
+    "message": "En la página, mostrar"
+  },
+  "inlineStyleHelp": {
+    "message": "Reemplazar oculta el precio del sitio sin borrarlo. El cursor lo vuelve a mostrar."
+  },
+  "inlineStyleBadge": {
+    "message": "Ambos precios"
+  },
+  "inlineStyleReplace": {
+    "message": "Solo el mío"
+  },
   "pageContext": {
     "message": "Leer $$, kr y ¥ según el país del sitio"
   },

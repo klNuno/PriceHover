@@ -12,7 +12,7 @@
     HOVER_DELAY_CHOICES, defaultSettings, parseHostnameInput, readSettings, updateSettings,
     watchSettings,
   } from '../../src/settings';
-  import type { Rounding, Settings, SettingsPatch } from '../../src/settings';
+  import type { InlineStyle, Rounding, Settings, SettingsPatch } from '../../src/settings';
   import { formatAgo } from '../../src/time';
   import { CRYPTO_STALE_AFTER_MS, STALE_AFTER_MS, STORAGE } from '../../src/types';
 
@@ -338,6 +338,16 @@
     Math.max((HOVER_DELAY_CHOICES as readonly number[]).indexOf(settings.hoverDelayMs), 0)
   );
   const roundingIndex = $derived(Math.max(ROUNDING_MODES.indexOf(settings.rounding), 0));
+
+  const INLINE_STYLES: InlineStyle[] = ['badge', 'replace'];
+  const inlineStyleLabel: Record<InlineStyle, string> = {
+    badge: 'inlineStyleBadge', replace: 'inlineStyleReplace',
+  };
+  const inlineStyleIndex = $derived(Math.max(INLINE_STYLES.indexOf(settings.inlineStyle), 0));
+  const inlineStyleSample = $derived.by(() => {
+    const converted = formatCurrencyAmount(23.2, settings.baseCurrency, settings.rounding);
+    return { badge: `Rp 479000 (${converted})`, replace: converted } as Record<InlineStyle, string>;
+  });
   const roundingSample = $derived.by(() => {
     const map = {} as Record<Rounding, string>;
     for (const mode of ROUNDING_MODES) {
@@ -555,6 +565,28 @@
         <span>{t('inlineMode')}</span>
       </label>
       <p class="help">{t('inlineModeHelp')}</p>
+
+      {#if settings.inlineMode}
+        <div class="field">
+          <span class="label" id="inline-style-label">{t('inlineStyle')}</span>
+          <p class="help">{t('inlineStyleHelp')}</p>
+          <div class="segments" role="radiogroup" aria-labelledby="inline-style-label">
+            {#each INLINE_STYLES as style, index (style)}
+              <button
+                type="button"
+                role="radio"
+                class:on={settings.inlineStyle === style}
+                aria-checked={settings.inlineStyle === style}
+                tabindex={index === inlineStyleIndex ? 0 : -1}
+                onclick={() => update({ inlineStyle: style })}
+                onkeydown={(e) => onSegmentKeydown(e, index, INLINE_STYLES.length,
+                  (next) => update({ inlineStyle: INLINE_STYLES[next] }))}
+              >{t(inlineStyleLabel[style])}</button>
+            {/each}
+          </div>
+          <p class="sample">{inlineStyleSample[settings.inlineStyle]}</p>
+        </div>
+      {/if}
 
       <label class="switch">
         <input type="checkbox" checked={settings.usePageContext} onchange={(e) => toggle('usePageContext', e.currentTarget)} />

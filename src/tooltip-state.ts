@@ -7,6 +7,12 @@ export interface TooltipState {
   sources: DetectedPrice[];
   allConversions: ConvertedPrice[][];
   rounding: Rounding;
+  /**
+   * How the page's own price is printed in the header. It follows `rounding`
+   * everywhere except in `replace` style, where the page no longer shows that
+   * price and a rounded copy of it would be the only one left.
+   */
+  sourceRounding: Rounding;
   /** Rates older than the staleness threshold, so the tooltip can say so. */
   stale: boolean;
   x: number;
@@ -19,6 +25,7 @@ const INITIAL_STATE: TooltipState = {
   sources: [],
   allConversions: [],
   rounding: 'exact',
+  sourceRounding: 'exact',
   stale: false,
   x: 0,
   y: 0,

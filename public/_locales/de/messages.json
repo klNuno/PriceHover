@@ -155,6 +155,18 @@
   "inlineModeHelp": {
     "message": "Ihre Währung neben jedem Preis, ohne Überfahren. Der Tooltip zeigt die Liste."
   },
+  "inlineStyle": {
+    "message": "Auf der Seite anzeigen"
+  },
+  "inlineStyleHelp": {
+    "message": "Ersetzen blendet den Preis der Seite aus, ohne ihn zu löschen. Der Tooltip zeigt ihn wieder."
+  },
+  "inlineStyleBadge": {
+    "message": "Beide Preise"
+  },
+  "inlineStyleReplace": {
+    "message": "Nur meinen"
+  },
   "pageContext": {
     "message": "$$, kr und ¥ nach dem Land der Website lesen"
   },

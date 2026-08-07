@@ -245,3 +245,51 @@ describe('inline annotation', () => {
     expect(badges()).toEqual(['(≈€9)']);
   });
 });
+
+describe('replacing the page price', () => {
+  const REPLACE: Partial<Settings> = { inlineMode: true, inlineStyle: 'replace' };
+  const priceCell = (): HTMLElement => document.querySelector('#cell') as HTMLElement;
+
+  test('collapses the price it stands in for, and keeps the text', async () => {
+    mount('<span id="cell">$10.00</span>', REPLACE).scan(document.body);
+    await flush(['€9.00']);
+
+    // No parentheses: this is the price now, not a note about it.
+    expect(badges()).toEqual(['€9.00']);
+    expect(priceCell().style.fontSize).toBe('0px');
+    // The site's own text is still there, unsplit and unedited, which is what
+    // the tooltip reads and what the site's own scripts still find.
+    expect(priceCell().firstChild?.nodeValue).toBe('$10.00');
+  });
+
+  test('leaves a price that shares its element with other text alone', async () => {
+    // Collapsing here would hide the word "Only" as well, and nothing would
+    // stand in for it.
+    mount('<p id="cell">Only $10.00</p>', REPLACE).scan(document.body);
+    await flush(['(€9.00)']);
+    expect(badges()).toEqual(['(€9.00)']);
+    expect(priceCell().getAttribute('style')).toBeNull();
+  });
+
+  test('gives the page its style attribute back when it stops', async () => {
+    const instance = mount('<span id="cell" style="color:red">$10.00</span>', REPLACE);
+    instance.scan(document.body);
+    await flush(['€9.00']);
+
+    instance.destroy();
+    annotator = null;
+    expect(priceCell().getAttribute('style')).toBe('color:red');
+    expect(badges()).toEqual([]);
+  });
+
+  test('a page that drops the badge gets its own price back', async () => {
+    // Otherwise the only thing on screen saying what the price is has gone, and
+    // the site's own text is still collapsed to nothing behind it.
+    mount('<span id="cell">$10.00</span>', REPLACE).scan(document.body);
+    await flush(['€9.00']);
+
+    document.querySelector(`[${INLINE_ATTR}]`)!.remove();
+    await flush([]);
+    expect(priceCell().style.fontSize).toBe('');
+  });
+});

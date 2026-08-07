@@ -331,6 +331,32 @@ const MESSAGES: Record<string, Entry> = {
     ja: 'ホバーなしで各価格の横に自国通貨を表示。ホバーで一覧が開きます。',
     zh_CN: '无需悬停即显示你的货币。悬停仍会打开列表。',
   },
+  inlineStyle: {
+    en: 'In the page, show', fr: 'Dans la page, afficher',
+    es: 'En la página, mostrar', de: 'Auf der Seite anzeigen',
+    pt_BR: 'Na página, mostrar', it: 'Nella pagina, mostra',
+    ja: 'ページ内の表示', zh_CN: '页面中显示',
+  },
+  inlineStyleHelp: {
+    en: 'Replacing hides the site’s price without deleting it. Hover shows it again.',
+    fr: 'Le remplacement masque le prix du site sans le supprimer. Le survol le réaffiche.',
+    es: 'Reemplazar oculta el precio del sitio sin borrarlo. El cursor lo vuelve a mostrar.',
+    de: 'Ersetzen blendet den Preis der Seite aus, ohne ihn zu löschen. Der Tooltip zeigt ihn wieder.',
+    pt_BR: 'Substituir oculta o preço do site sem apagá-lo. O cursor mostra ele de novo.',
+    it: 'Sostituire nasconde il prezzo del sito senza cancellarlo. Il cursore lo mostra di nuovo.',
+    ja: '置き換えてもサイトの価格は削除されず、隠れるだけです。ホバーで再表示されます。',
+    zh_CN: '替换只是隐藏网站原价，并未删除。悬停即可再次看到。',
+  },
+  inlineStyleBadge: {
+    en: 'Both prices', fr: 'Les deux prix', es: 'Ambos precios',
+    de: 'Beide Preise', pt_BR: 'Os dois preços', it: 'Entrambi i prezzi',
+    ja: '両方の価格', zh_CN: '两个价格',
+  },
+  inlineStyleReplace: {
+    en: 'Mine only', fr: 'Le mien seulement', es: 'Solo el mío',
+    de: 'Nur meinen', pt_BR: 'Só o meu', it: 'Solo il mio',
+    ja: '自国通貨のみ', zh_CN: '只显示我的',
+  },
   pageContext: {
     en: 'Read $, kr and ¥ from the site’s country',
     fr: 'Lire $, kr et ¥ selon le pays du site',

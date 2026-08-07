@@ -155,6 +155,18 @@
   "inlineModeHelp": {
     "message": "ホバーなしで各価格の横に自国通貨を表示。ホバーで一覧が開きます。"
   },
+  "inlineStyle": {
+    "message": "ページ内の表示"
+  },
+  "inlineStyleHelp": {
+    "message": "置き換えてもサイトの価格は削除されず、隠れるだけです。ホバーで再表示されます。"
+  },
+  "inlineStyleBadge": {
+    "message": "両方の価格"
+  },
+  "inlineStyleReplace": {
+    "message": "自国通貨のみ"
+  },
   "pageContext": {
     "message": "サイトの国に応じて $$・kr・¥ を解釈する"
   },

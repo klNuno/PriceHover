@@ -7,14 +7,21 @@ import type { ExchangeRates } from './types';
 /**
  * Inline mode writes into the page instead of waiting for a hover. That is a
  * different risk profile from a tooltip in a shadow root, so the rules are
- * strict: never replace the site's own text, only append beside it; never touch
- * anything editable or machine-read; and stop after a fixed budget rather than
- * grinding through a 50 000-node page.
+ * strict: never touch the site's own text, never touch anything editable or
+ * machine-read, and stop after a fixed budget rather than grinding through a
+ * 50 000-node page.
  *
- * "Append, never rewrite" covers the node itself, not only its characters: a
- * framework hands out references to the Text nodes it rendered, so splitting or
- * merging one is as destructive as overwriting its text. Nothing here calls
- * `splitText` or `normalize`.
+ * "Never touch the text" covers the node itself, not only its characters: a
+ * framework hands out references to the Text nodes it rendered, so splitting,
+ * merging or reparenting one is as destructive as overwriting its text. Nothing
+ * here calls `splitText`, `normalize`, or moves a node the page created.
+ *
+ * `replace` style holds to that too. It does not remove the page's price, it
+ * collapses it with a style on the element that holds it, and puts the
+ * converted amount next to it. The text node is still there, still says what
+ * the site wrote, still reachable by the site's own code; the tooltip shows it
+ * on hover; and flipping the setting back restores the element's `style`
+ * attribute exactly as it was.
  */
 
 export const INLINE_ATTR = 'data-pricehover';
@@ -82,6 +89,13 @@ function isSkipped(node: Text): boolean {
 export function createInlineAnnotator(deps: InlineDeps): Annotator {
   const inserted = new Set<HTMLElement>();
   /**
+   * Elements whose own text this annotator collapsed, and the `style` attribute
+   * they had before. Keyed by the badge that replaced them, so the two are
+   * always undone together: a badge the page throws away must not leave an
+   * invisible price behind it.
+   */
+  const collapsed = new Map<HTMLElement, { el: HTMLElement; previous: string | null }>();
+  /**
    * Text a node held when it was last annotated. A node reaches the queue more
    * than once (a mutation record and a rescan can both name it) and without
    * this it would collect a second copy of every badge. Unchanged text means
@@ -114,6 +128,14 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
       for (const node of record.addedNodes) {
         if (node.nodeType === Node.ELEMENT_NODE && (node as Element).hasAttribute?.(INLINE_ATTR)) continue;
         enqueue(node);
+      }
+      // A page that re-renders a price container drops our badge with it. In
+      // `replace` style that badge is the only thing on screen saying what the
+      // price is, so the element it hid has to be given its text back.
+      for (const node of record.removedNodes) {
+        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+        const badge = node as HTMLElement;
+        if (collapsed.has(badge)) restoreCollapsed(badge);
       }
       if (record.type === 'characterData' && record.target.nodeType === Node.TEXT_NODE) {
         enqueue(record.target);
@@ -165,7 +187,11 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
    */
   function withinBudget(): boolean {
     if (inserted.size < MAX_ANNOTATIONS) return true;
-    for (const badge of inserted) if (!badge.isConnected) inserted.delete(badge);
+    for (const badge of inserted) {
+      if (badge.isConnected) continue;
+      restoreCollapsed(badge);
+      inserted.delete(badge);
+    }
     return inserted.size < MAX_ANNOTATIONS;
   }
 
@@ -186,6 +212,7 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
 
     const resolve = deps.resolver();
     const base = settings.baseCurrency;
+    const replacing = settings.inlineStyle === 'replace';
     let processed = 0;
 
     while (processed < CHUNK && withinBudget()) {
@@ -215,15 +242,59 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
       // the only one that can do anything about it, and it re-runs this pass
       // when it has: crypto is the case that made this necessary.
       if (!converted) { deps.onUnpriced?.(price.currencyCode); continue; }
-      annotate(node, converted.formattedMax
+      const label = converted.formattedMax
         ? `${converted.formatted} – ${converted.formattedMax}`
-        : converted.formatted);
+        : converted.formatted;
+      annotate(node, label, replacing && canCollapse(node, text, price.matchStart ?? 0));
     }
 
     if (!withinBudget()) resetQueue();
   }
 
-  function annotate(node: Text, label: string): void {
+  /**
+   * Whether the page's own price can be collapsed rather than annotated.
+   *
+   * Two conditions, and both are about owning the whole line. The element must
+   * hold this text node and nothing else, or collapsing it would take a label,
+   * a currency symbol in its own span, or a sibling price down with it. And the
+   * price must be the entire text, not the tail of it: `Now ¥1980` would leave
+   * the word "Now" hidden with nothing standing in for it.
+   */
+  function canCollapse(node: Text, text: string, matchStart: number): boolean {
+    const parent = node.parentElement;
+    if (!parent || parent.childNodes.length !== 1) return false;
+    return !text.slice(0, matchStart).trim();
+  }
+
+  /**
+   * Collapses an element's text to nothing without touching the text.
+   *
+   * `font-size:0` rather than `display:none` on the element: a `<td>` set to
+   * `display:none` leaves the table, and every cell to its right shifts one
+   * column left. The letter and word spacing go with it because both are
+   * per-character widths that survive a zero font size.
+   *
+   * Returns the size the text had, which the badge then takes: it lives inside
+   * the collapsed element and would otherwise inherit the zero.
+   */
+  function collapseText(el: HTMLElement): { size: string; previous: string | null } {
+    const size = getComputedStyle(el).fontSize || '1em';
+    const previous = el.getAttribute('style');
+    el.style.setProperty('font-size', '0');
+    el.style.setProperty('letter-spacing', '0');
+    el.style.setProperty('word-spacing', '0');
+    return { size, previous };
+  }
+
+  function restoreCollapsed(badge: HTMLElement): void {
+    const entry = collapsed.get(badge);
+    if (!entry) return;
+    collapsed.delete(badge);
+    if (entry.previous === null) entry.el.removeAttribute('style');
+    else entry.el.setAttribute('style', entry.previous);
+  }
+
+  function annotate(node: Text, label: string, collapse: boolean): void {
     const parent = node.parentNode;
     if (!parent) return;
 
@@ -231,16 +302,25 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
     badge.setAttribute(INLINE_ATTR, '1');
     // The badge is decoration over the page's own text: it has no business in a
     // copied selection, in find-in-page, or in what a screen reader announces.
-    badge.setAttribute('aria-hidden', 'true');
+    // Replacing is the exception on the last point, since the text it stands in
+    // for is the one thing on the line a reader can no longer see.
+    if (!collapse) badge.setAttribute('aria-hidden', 'true');
+
+    const hidden = collapse ? collapseText(node.parentElement!) : null;
     // Inline styles rather than a stylesheet: this element lives in the page,
     // and a page stylesheet would be free to restyle a class of ours.
-    badge.style.cssText =
-      'all:unset;font:inherit;font-size:0.85em;opacity:0.75;' +
-      'white-space:nowrap;unicode-bidi:isolate;margin-inline-start:0.35em;' +
-      'user-select:none;-webkit-user-select:none;';
-    badge.textContent = `(${label})`;
+    badge.style.cssText = hidden
+      ? `all:unset;font:inherit;font-size:${hidden.size};` +
+        'letter-spacing:normal;word-spacing:normal;' +
+        'white-space:nowrap;unicode-bidi:isolate;' +
+        'user-select:none;-webkit-user-select:none;'
+      : 'all:unset;font:inherit;font-size:0.85em;opacity:0.75;' +
+        'white-space:nowrap;unicode-bidi:isolate;margin-inline-start:0.35em;' +
+        'user-select:none;-webkit-user-select:none;';
+    badge.textContent = hidden ? label : `(${label})`;
     parent.insertBefore(badge, node.nextSibling);
     inserted.add(badge);
+    if (hidden) collapsed.set(badge, { el: node.parentElement!, previous: hidden.previous });
 
     const owned = nodeBadges.get(node);
     if (owned) owned.push(badge);
@@ -254,13 +334,17 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
 
     for (const badge of owned) {
       inserted.delete(badge);
+      restoreCollapsed(badge);
       badge.remove();
     }
     nodeBadges.delete(node);
   }
 
   function clear(): void {
-    for (const badge of inserted) badge.remove();
+    for (const badge of inserted) {
+      restoreCollapsed(badge);
+      badge.remove();
+    }
     inserted.clear();
     seen = new WeakMap();
     nodeBadges = new WeakMap();
