@@ -16,6 +16,12 @@ import type { ExchangeRates } from './types';
  * merging or reparenting one is as destructive as overwriting its text. Nothing
  * here calls `splitText`, `normalize`, or moves a node the page created.
  *
+
+ * The page's layout is the site's too. A badge that would push the text it
+ * annotates onto a second line is taken back rather than kept: the hover still
+ * answers there, and a table whose every row grew by a line is a page the
+ * extension broke. See `place`.
+ *
  * `replace` style holds to that too. It does not remove the page's price, it
  * collapses it with a style on the element that holds it, and puts the
  * converted amount next to it. The text node is still there, still says what
@@ -62,6 +68,20 @@ interface Annotator {
   destroy(): void;
 }
 
+/** What a collapsed element's text looked like, so its badge can look the same. */
+interface TextType {
+  size: string;
+  line: string;
+}
+
+/** A badge a slice decided on, held back until the slice can be placed in one go. */
+interface Pending {
+  node: Text;
+  label: string;
+  /** Whether the badge stands in for the page's own price rather than following it. */
+  collapse: boolean;
+}
+
 type IdleHandle = number;
 
 const requestIdle: (cb: () => void) => IdleHandle =
@@ -73,6 +93,20 @@ const cancelIdle: (handle: IdleHandle) => void =
   typeof cancelIdleCallback === 'function'
     ? (handle) => cancelIdleCallback(handle as unknown as number)
     : (handle) => clearTimeout(handle as unknown as number);
+
+/**
+ * How tall an element's own content is, as opposed to how tall its box is. A
+ * range over the contents ignores what stretched the box around them, which is
+ * what a table row does to every cell in it.
+ */
+function textHeight(el: HTMLElement | null): number {
+  if (!el) return 0;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const height = range.getBoundingClientRect().height;
+  range.detach();
+  return height;
+}
 
 function isSkipped(node: Text): boolean {
   for (let el = node.parentElement; el; el = el.parentElement) {
@@ -213,9 +247,12 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
     const resolve = deps.resolver();
     const base = settings.baseCurrency;
     const replacing = settings.inlineStyle === 'replace';
+    const batch: Pending[] = [];
     let processed = 0;
 
-    while (processed < CHUNK && withinBudget()) {
+    // The batch counts against the budget too: it is inserted at the end of the
+    // slice, and without this a page of prices would overshoot by a whole chunk.
+    while (processed < CHUNK && withinBudget() && inserted.size + batch.length < MAX_ANNOTATIONS) {
       const node = nextText();
       if (!node) break;
       processed++;
@@ -245,10 +282,57 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
       const label = converted.formattedMax
         ? `${converted.formatted} – ${converted.formattedMax}`
         : converted.formatted;
-      annotate(node, label, replacing && canCollapse(node, text, price.matchStart ?? 0));
+      batch.push({ node, label, collapse: replacing && canCollapse(node, text, price.matchStart ?? 0) });
     }
 
+    place(batch);
     if (!withinBudget()) resetQueue();
+  }
+
+  /**
+   * Inserts a slice of badges, then takes back the ones that pushed the page
+   * around. A badge is decoration: it may sit beside a price, it may not cost
+   * the site a line. The case that made this necessary is a price table with
+   * narrow cells, where every annotated row gained a line and the page grew by
+   * a third.
+   *
+   * Reads, then writes, then reads: two layout passes for the whole slice
+   * rather than one per badge. The font size a collapsed element hands its
+   * badge is read in the first pass for the same reason.
+   *
+   * What is measured is the element's own text, not the element: a table cell
+   * is as tall as its row, so the cell beside the one that wrapped grew too,
+   * and measuring the box would have taken back every badge in the table. The
+   * tolerance is half a line, because a badge one font size smaller than the
+   * text sits a few pixels below it without wrapping anything.
+   */
+  function place(batch: Pending[]): void {
+    if (!batch.length) return;
+
+    const hosts = batch.map((b) => b.node.parentElement);
+    const before = hosts.map(textHeight);
+    const styles = hosts.map((el) => (el ? getComputedStyle(el) : null));
+    const type = batch.map((b, i) =>
+      b.collapse && styles[i]
+        ? { size: styles[i]!.fontSize || '1em', line: styles[i]!.lineHeight || 'normal' }
+        : null,
+    );
+    const room = styles.map((s) => {
+      if (!s) return Infinity;
+      const line = parseFloat(s.lineHeight);
+      return (Number.isFinite(line) ? line : parseFloat(s.fontSize) * 1.2) / 2;
+    });
+
+    for (const [i, b] of batch.entries()) annotate(b.node, b.label, type[i] ?? null);
+
+    const after = hosts.map(textHeight);
+    for (const [i, b] of batch.entries()) {
+      // A height of zero is a page that cannot be measured, not a page that
+      // stayed put: a detached subtree, a hidden tab, a DOM without layout. The
+      // badge stays, since there is no wrap to answer for.
+      if (!after[i] || after[i]! <= before[i]! + room[i]!) continue;
+      removeBadgesFor(b.node);
+    }
   }
 
   /**
@@ -274,16 +358,23 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
    * column left. The letter and word spacing go with it because both are
    * per-character widths that survive a zero font size.
    *
-   * Returns the size the text had, which the badge then takes: it lives inside
-   * the collapsed element and would otherwise inherit the zero.
+   * The type comes from the caller, which read it before any of this slice's
+   * writes: the badge lives inside the collapsed element and would otherwise
+   * inherit the zero.
+   *
+   * `line-height:0` goes with the zero font size, and the badge carries the
+   * element's real line height instead. Without it the line keeps a strut half
+   * a leading tall above and below the baseline, the badge adds its own box on
+   * top of that, and every collapsed line came out five pixels taller than the
+   * one it replaced: a table gained a fifth of its height on annotation.
    */
-  function collapseText(el: HTMLElement): { size: string; previous: string | null } {
-    const size = getComputedStyle(el).fontSize || '1em';
+  function collapseText(el: HTMLElement, type: TextType): { type: TextType; previous: string | null } {
     const previous = el.getAttribute('style');
     el.style.setProperty('font-size', '0');
+    el.style.setProperty('line-height', '0');
     el.style.setProperty('letter-spacing', '0');
     el.style.setProperty('word-spacing', '0');
-    return { size, previous };
+    return { type, previous };
   }
 
   function restoreCollapsed(badge: HTMLElement): void {
@@ -294,7 +385,7 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
     else entry.el.setAttribute('style', entry.previous);
   }
 
-  function annotate(node: Text, label: string, collapse: boolean): void {
+  function annotate(node: Text, label: string, type: TextType | null): void {
     const parent = node.parentNode;
     if (!parent) return;
 
@@ -304,13 +395,13 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
     // copied selection, in find-in-page, or in what a screen reader announces.
     // Replacing is the exception on the last point, since the text it stands in
     // for is the one thing on the line a reader can no longer see.
-    if (!collapse) badge.setAttribute('aria-hidden', 'true');
+    if (type === null) badge.setAttribute('aria-hidden', 'true');
 
-    const hidden = collapse ? collapseText(node.parentElement!) : null;
+    const hidden = type === null ? null : collapseText(node.parentElement!, type);
     // Inline styles rather than a stylesheet: this element lives in the page,
     // and a page stylesheet would be free to restyle a class of ours.
     badge.style.cssText = hidden
-      ? `all:unset;font:inherit;font-size:${hidden.size};` +
+      ? `all:unset;font:inherit;font-size:${hidden.type.size};line-height:${hidden.type.line};` +
         'letter-spacing:normal;word-spacing:normal;' +
         'white-space:nowrap;unicode-bidi:isolate;' +
         'user-select:none;-webkit-user-select:none;'

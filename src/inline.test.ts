@@ -293,3 +293,38 @@ describe('replacing the page price', () => {
     expect(priceCell().style.fontSize).toBe('');
   });
 });
+
+describe('leaving the page’s layout where it was', () => {
+  /**
+   * happy-dom lays nothing out, so every height it reports is zero and the
+   * guard has nothing to read. This answers the range the guard measures with
+   * the height a browser would have given it: one line, or two once the badge
+   * is in.
+   */
+  const native = Range.prototype.getBoundingClientRect;
+  const stubHeight = (bare: number, annotated: number): void => {
+    Range.prototype.getBoundingClientRect = function (this: Range) {
+      const el = this.commonAncestorContainer as HTMLElement;
+      const annotatedNow = el.querySelector?.(`[${INLINE_ATTR}]`);
+      return { height: annotatedNow ? annotated : bare } as DOMRect;
+    };
+  };
+  afterEach(() => { Range.prototype.getBoundingClientRect = native; });
+
+  test('takes a badge back when it costs the page a line', async () => {
+    // A narrow price cell in a table: the badge fits nowhere and the row grows.
+    // The hover still answers there, and the site's own layout is untouched.
+    mount('<p id="cell">Now $10.00</p>').scan(document.body);
+    stubHeight(20, 40);
+    await flush();
+    expect(badges()).toEqual([]);
+    expect(document.querySelector('#cell')!.textContent).toBe('Now $10.00');
+  });
+
+  test('keeps a badge the page had room for', async () => {
+    mount('<p id="cell">Now $10.00</p>').scan(document.body);
+    stubHeight(20, 22);
+    await flush(['(€9.00)']);
+    expect(badges()).toEqual(['(€9.00)']);
+  });
+});

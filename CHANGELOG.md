@@ -57,6 +57,23 @@ It applies only where the price is the entire content of its element, which is
 what a price cell or a price tag is. A price sitting in a sentence still gets a
 badge beside it: collapsing that would take the sentence with it.
 
+### Inline mode pushed the page around
+
+A price table gained a line on every row it annotated. Two causes, both about
+line boxes rather than about prices.
+
+A collapsed element kept its own line height, so the line held a strut half a
+leading tall above and below the baseline, and the badge added its own box on
+top of that. Five pixels a row, on every row: a forty-row table grew by a fifth
+of itself. The collapsed element now hands its line height to the badge and
+keeps none.
+
+The other one is a cell too narrow for both the price and the badge, which
+wrapped and cost the row a whole line. A badge is decoration, and decoration
+does not get to relayout the site, so it is now inserted, measured, and taken
+back if the text it annotates grew taller than a browser's rounding. The hover
+still answers on those prices.
+
 ## 2.1.2
 
 - The page-wide `itemscope` fix from 2.1.1 only closed half the hole. Requiring the price to sit on the hovered element's line of descent still let every container that *encloses* the annotation claim it, and on a page whose `<body>` carries the `itemscope` that is most of the page: the empty space beside the "Steam price history" heading on SteamDB kept answering `$39.99`. An enclosing `itemscope` is now searched only when the hovered element carries part of the annotation itself, which is what the release before 2.0.0 did before the subtree lookup was added.
