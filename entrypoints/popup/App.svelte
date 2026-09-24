@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { convertPrice } from '../../src/convert';
   import { CRYPTO_ASSETS, isCryptoCode } from '../../src/crypto';
+  import { setCryptoDetection } from '../../src/detector';
   import { ASSET_BY_CODE, CURRENCIES, flagToCountryCode } from '../../src/currencies';
   import { flagImage } from '../../src/flags';
   import { t, uiLocale } from '../../src/i18n';
@@ -15,7 +16,7 @@
   } from '../../src/settings';
   import type { Settings, SettingsPatch } from '../../src/settings';
   import { formatAgo } from '../../src/time';
-  import { CRYPTO_STALE_AFTER_MS, STALE_AFTER_MS, STORAGE } from '../../src/types';
+  import { CRYPTO_CACHE_MS, CRYPTO_STALE_AFTER_MS, STALE_AFTER_MS, STORAGE } from '../../src/types';
   import type { ExchangeRates } from '../../src/types';
 
   let settings = $state<Settings>(defaultSettings());
@@ -171,7 +172,33 @@
     ratesTimestamp = result.timestamp ?? Date.now();
   }
 
-  const parsed = $derived(parseQuery(query, settings.baseCurrency));
+  const parsed = $derived.by(() => {
+    // `₿0.05` typed as is goes through the page detector, which reads crypto
+    // only when told to. This document has its own copy of that switch, and it
+    // is set here rather than in an effect so it can never lag the parse.
+    setCryptoDetection(cryptoUsable);
+    return parseQuery(query, settings.baseCurrency, { crypto: cryptoUsable });
+  });
+
+  /** The query converts from or into a crypto asset. */
+  const queryCrypto = $derived(
+    cryptoUsable &&
+    ((parsed.price !== null && isCryptoCode(parsed.price.currencyCode)) ||
+     (parsed.targetCode !== null && isCryptoCode(parsed.targetCode)))
+  );
+
+  /**
+   * A crypto amount typed with no crypto target in the list is the one case
+   * nothing else refreshes for: the content script asks only for what a page
+   * shows. Once per popup, and only when the table is missing or old.
+   */
+  let cryptoAsked = false;
+  $effect(() => {
+    if (!queryCrypto || cryptoAsked) return;
+    if (cryptoRates && Math.abs(Date.now() - cryptoTimestamp) < CRYPTO_CACHE_MS) return;
+    cryptoAsked = true;
+    void send(MESSAGE.REFRESH_CRYPTO).then(() => readRates()).catch(() => {});
+  });
   const isCalc = $derived(parsed.price !== null);
 
   /** One table for everything downstream; the crypto half wins a collision. */
@@ -185,7 +212,7 @@
    * screen. "Rates 2 minutes ago" next to a five-hour-old BTC row would be true
    * about the fiat table and a lie about the number underneath it.
    */
-  const cryptoShown = $derived(wantsCrypto(settings));
+  const cryptoShown = $derived(wantsCrypto(settings) || queryCrypto);
   const shownTimestamp = $derived(
     cryptoShown && cryptoTimestamp > 0 ? Math.min(ratesTimestamp, cryptoTimestamp) : ratesTimestamp
   );

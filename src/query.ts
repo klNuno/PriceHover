@@ -1,5 +1,6 @@
+import { CRYPTO_ASSETS, isCryptoCode } from './crypto';
 import { CURRENCIES, CURRENCY_BY_CODE } from './currencies';
-import { detectPriceFromText } from './detector';
+import { detectPriceFromText, normalizeAmount } from './detector';
 import type { DetectedPrice } from './types';
 
 /**
@@ -40,7 +41,28 @@ export const CURRENCY_ALIASES: ReadonlyMap<string, string> = (() => {
   return map;
 })();
 
-export function resolveCurrencyCode(token: string): string | null {
+/**
+ * Tickers and single-word names. Fiat keeps every word it already had: `sol`
+ * stays the Peruvian sol, as it does on a page, and Solana is typed `solana`.
+ */
+export const CRYPTO_ALIASES: ReadonlyMap<string, string> = (() => {
+  const map = new Map<string, string>();
+  const add = (alias: string, code: string): void => {
+    if (!CURRENCY_ALIASES.has(alias) && !CURRENCY_BY_CODE.has(alias.toUpperCase()) && !map.has(alias)) {
+      map.set(alias, code);
+    }
+  };
+  for (const asset of CRYPTO_ASSETS) {
+    add(asset.code.toLowerCase(), asset.code);
+    if (!/\s/.test(asset.name)) add(asset.name.toLowerCase(), asset.code);
+  }
+  add('ether', 'ETH');
+  add('bitcoins', 'BTC');
+  return map;
+})();
+
+/** `crypto`: whether crypto names count, which is whether they can be priced. */
+export function resolveCurrencyCode(token: string, crypto = false): string | null {
   const normalized = token.trim().toLowerCase();
   if (!normalized) return null;
 
@@ -48,7 +70,8 @@ export function resolveCurrencyCode(token: string): string | null {
   if (alias) return alias;
 
   const upper = normalized.toUpperCase();
-  return CURRENCY_BY_CODE.has(upper) ? upper : null;
+  if (CURRENCY_BY_CODE.has(upper)) return upper;
+  return crypto ? CRYPTO_ALIASES.get(normalized) ?? null : null;
 }
 
 export interface ParsedQuery {
@@ -70,10 +93,23 @@ const NUMERIC_TOKEN = /^[\d,.']+$/;
 function detectAmount(amountTokens: string[], code: string): DetectedPrice | null {
   const amount = amountTokens.join('').replace(/'/g, '');
   if (!amount) return null;
+  // Crypto skips the page detector on purpose. Its rules are about telling a
+  // price from a postcode (`ETH 8092`) and it believes nine tickers of the
+  // twenty-four; neither question arises when the user typed the code.
+  if (isCryptoCode(code)) {
+    if (!/^[\d,.]+$/.test(amount)) return null;
+    const value = normalizeAmount(amount, code);
+    return Number.isFinite(value) && value > 0 ? { amount: value, currencyCode: code } : null;
+  }
   return detectPriceFromText(`${amount} ${code}`) ?? detectPriceFromText(`${code} ${amount}`);
 }
 
-export function parseQuery(raw: string, baseCurrency?: string): ParsedQuery {
+export interface QueryOptions {
+  /** Crypto names and tickers count. Only true when a crypto rate can be had. */
+  crypto?: boolean;
+}
+
+export function parseQuery(raw: string, baseCurrency?: string, options: QueryOptions = {}): ParsedQuery {
   const query = raw.trim();
   if (!query) return { price: null, targetCode: null, filter: '' };
 
@@ -82,7 +118,7 @@ export function parseQuery(raw: string, baseCurrency?: string): ParsedQuery {
   const words = tokens.filter((token) => !NUMERIC_TOKEN.test(token));
 
   if (numbers.length && numbers.length + words.length === tokens.length && words.length <= 2) {
-    const codes = words.map(resolveCurrencyCode);
+    const codes = words.map((word) => resolveCurrencyCode(word, options.crypto));
 
     if (words.length === 0 && baseCurrency) {
       // A bare number means "this many of my own currency", the most common

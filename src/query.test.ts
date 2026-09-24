@@ -74,3 +74,42 @@ describe('parseQuery', () => {
     expect(parseQuery('   ')).toEqual({ price: null, targetCode: null, filter: '' });
   });
 });
+
+describe('crypto in the calculator', () => {
+  test('a ticker or a name is a source once crypto is on', () => {
+    for (const query of ['0.5 btc', 'btc 0.5', '0.5 bitcoin']) {
+      expect(parseQuery(query, 'EUR', { crypto: true }).price).toEqual({ amount: 0.5, currencyCode: 'BTC' });
+    }
+  });
+
+  test('and a destination', () => {
+    const parsed = parseQuery('100 eur eth', 'EUR', { crypto: true });
+    expect([parsed.price?.currencyCode, parsed.targetCode]).toEqual(['EUR', 'ETH']);
+    expect(parseQuery('100 eur ether', 'EUR', { crypto: true }).targetCode).toBe('ETH');
+  });
+
+  test('every asset, not only the nine a page is trusted with', () => {
+    expect(parseQuery('12 avax usd', 'EUR', { crypto: true }).price?.currencyCode).toBe('AVAX');
+    expect(parseQuery('3 solana', 'EUR', { crypto: true }).price?.currencyCode).toBe('SOL');
+  });
+
+  test('a long round amount is fine here, unlike on a page', () => {
+    // On a page `ETH 8092` is Zurich. In the calculator it is what was typed.
+    expect(parseQuery('8092 eth', 'EUR', { crypto: true }).price?.amount).toBe(8092);
+  });
+
+  test('crypto decimals survive', () => {
+    expect(parseQuery('0.00012345 btc', 'EUR', { crypto: true }).price?.amount).toBe(0.00012345);
+    expect(parseQuery('1.005 btc', 'EUR', { crypto: true }).price?.amount).toBe(1.005);
+  });
+
+  test('fiat keeps its words: sol is the Peruvian sol', () => {
+    expect(resolveCurrencyCode('sol', true)).toBe('PEN');
+  });
+
+  test('off, a crypto word is just text to filter with', () => {
+    const parsed = parseQuery('0.5 btc', 'EUR');
+    expect(parsed.price).toBeNull();
+    expect(resolveCurrencyCode('bitcoin')).toBeNull();
+  });
+});
