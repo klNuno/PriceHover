@@ -1,5 +1,6 @@
 import { isCryptoCode } from './crypto';
 import { ASSET_BY_CODE, CURRENCY_BY_CODE } from './currencies';
+import { familyOfCode } from './families';
 import { STORAGE, DEFAULT_CURRENCIES } from './types';
 
 /**
@@ -29,6 +30,13 @@ export interface Settings {
   enabled: boolean;
   /** Hostnames where the extension stays quiet. Stored without `www.`. */
   disabledSites: string[];
+  /**
+   * Hostname → the currency `$`, `kr` or `¥` always means there. One code per
+   * site, and only a code one of those tokens can stand for: `CAD` locks `$`
+   * and leaves `kr` and `¥` to the page. Beats every guess, and holds with
+   * `usePageContext` off, because it is not a guess.
+   */
+  lockedSites: Record<string, string>;
   /** The user's own currency. Always shown first, never converted away from. */
   baseCurrency: string;
   /** Additional currencies to show. Never contains `baseCurrency`. */
@@ -54,6 +62,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   enabled: true,
   disabledSites: [],
+  lockedSites: {},
   baseCurrency: 'EUR',
   targetCurrencies: ['USD', 'GBP'],
   hoverDelayMs: 180,
@@ -75,6 +84,7 @@ export function defaultSettings(): Settings {
   return {
     ...DEFAULT_SETTINGS,
     disabledSites: [...DEFAULT_SETTINGS.disabledSites],
+    lockedSites: { ...DEFAULT_SETTINGS.lockedSites },
     targetCurrencies: [...DEFAULT_SETTINGS.targetCurrencies],
   };
 }
@@ -127,6 +137,29 @@ export function isSiteDisabled(settings: Settings, hostname: string): boolean {
 
 export function isActiveOn(settings: Settings, hostname: string): boolean {
   return settings.enabled && !isSiteDisabled(settings, hostname);
+}
+
+/** The currency the user locked for this site, if any. */
+export function lockedCurrency(settings: Settings, hostname: string): string | null {
+  const host = normalizeHostname(hostname);
+  return Object.hasOwn(settings.lockedSites, host) ? settings.lockedSites[host] : null;
+}
+
+/** A code a lock may name: one that `$`, `kr` or `¥` can stand for. */
+export function isLockableCode(code: unknown): code is string {
+  return typeof code === 'string' && CURRENCY_BY_CODE.has(code) && familyOfCode(code) !== null;
+}
+
+function parseLockedSites(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [host, code] of Object.entries(value)) {
+    const key = normalizeHostname(host);
+    // A code no token can stand for could only have been written by hand in
+    // devtools, and it would lock nothing: dropping it loses nothing.
+    if (key && key !== '__proto__' && isLockableCode(code)) out[key] = code;
+  }
+  return out;
 }
 
 /** Every currency the user wants to see, base first. */
@@ -186,6 +219,7 @@ export function parseSettings(raw: unknown): Settings {
             .filter((s) => s !== '')
         )]
       : [],
+    lockedSites: parseLockedSites(input.lockedSites),
     baseCurrency,
     targetCurrencies: targets,
     hoverDelayMs: Number.isFinite(delay) ? Math.min(2000, Math.max(0, delay)) : DEFAULT_SETTINGS.hoverDelayMs,
@@ -280,6 +314,7 @@ function toPlain(settings: Settings): Settings {
     ...settings,
     targetCurrencies: [...settings.targetCurrencies],
     disabledSites: [...settings.disabledSites],
+    lockedSites: { ...settings.lockedSites },
   };
 }
 

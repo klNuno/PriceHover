@@ -1,6 +1,8 @@
 import type { DetectedPrice } from './types';
 import { isCryptoCode } from './crypto';
 import { CURRENCY_BY_CODE } from './currencies';
+import { FAMILY_CODES, familyOfToken } from './families';
+import type { Family } from './families';
 import type { TokenResolver } from './locale';
 
 /**
@@ -366,6 +368,35 @@ type TokenSide = 'before' | 'after';
 interface RawMatch {
   price: DetectedPrice;
   side: TokenSide;
+  /** Set for `$`, `kr` and `¥`, the tokens that do not say which currency they are. */
+  family: Family | null;
+  /** The currency was printed beside the token: `$49 CAD`, `CAD $49`. */
+  written: boolean;
+}
+
+/**
+ * `$49 CAD` and `CAD $49`: the page wrote the currency out, next to a token
+ * that could not say it alone. Only a code of the token's own family counts,
+ * so `$49 EUR` stays a dollar price with a stray word beside it.
+ */
+const CODE_AFTER = new RegExp(`^${SPACE}?([A-Z]{3})(?![\\p{L}\\d])`, 'u');
+const CODE_BEFORE = new RegExp(`(?<![\\p{L}\\d])([A-Z]{3})${SPACE}?$`, 'u');
+
+function writtenCode(
+  input: string,
+  start: number,
+  end: number,
+  family: Family
+): { code: string; start: number; end: number } | null {
+  const after = CODE_AFTER.exec(input.slice(end, end + 8));
+  if (after && FAMILY_CODES[family].includes(after[1])) {
+    return { code: after[1], start, end: end + after[0].length };
+  }
+  const before = CODE_BEFORE.exec(input.slice(Math.max(0, start - 8), start));
+  if (before && FAMILY_CODES[family].includes(before[1])) {
+    return { code: before[1], start: start - before[0].length, end };
+  }
+  return null;
 }
 
 function parseMatch(
@@ -445,26 +476,37 @@ function parseMatch(
     side === 'after' ? SUFFIX_NEEDS_PRICE_SHAPE.has(spec.token) : spec.token === 'R' && !tight;
   if (loose && !PRICE_SHAPED.test(rawAmount)) return null;
 
-  // `$`, `kr` and `¥` mean different currencies in different markets. The page
-  // resolves them; without a resolver the historical default stands.
-  const currencyCode = resolve ? resolve(token, spec.code) : spec.code;
+  // `$`, `kr` and `¥` mean different currencies in different markets. A code
+  // printed beside the token settles it; otherwise the page resolves it, and
+  // without a resolver the historical default stands.
+  const family = familyOfToken(token);
+  const written = family && match.input
+    ? writtenCode(match.input, index, index + match[0].length, family)
+    : null;
+  const currencyCode = written?.code ?? (resolve ? resolve(token, spec.code) : spec.code);
+  const start = written?.start ?? index;
+  const end = written?.end ?? index + match[0].length;
+  // A reading the user locked is theirs, not a guess to warn about.
+  const locked = resolve?.locked?.has(token.replace(STRIPPABLE_SPACE, '')) ?? false;
 
   const amount = normalizeAmount(rawAmount, currencyCode);
   if (!Number.isFinite(amount) || amount <= 0) return null;
 
   return {
     side,
+    family,
+    written: written !== null,
     price: {
       amount,
       currencyCode,
-      matchedText: match[0],
-      matchStart: index,
-      matchEnd: index + match[0].length,
+      matchedText: match.input?.slice(start, end) ?? match[0],
+      matchStart: start,
+      matchEnd: end,
       textSource,
       // Only when the page actually changed the reading: a `$` on a .ca domain,
       // not every `$` in existence. The tooltip says so, and a claim that fires
       // on every price is a claim nobody reads.
-      ...(currencyCode !== spec.code ? { inferred: true } : {}),
+      ...(currencyCode !== spec.code && !written && !locked ? { inferred: true } : {}),
     },
   };
 }
@@ -491,12 +533,17 @@ function mergeRanges(text: string, matches: RawMatch[]): DetectedPrice[] {
 
     if (start < claimedUntil) continue;
 
-    // Two full matches with nothing but a dash between them.
+    // Two full matches with nothing but a dash between them. `$10 – $20 CAD`
+    // writes the code once for both ends, so the upper one lends it.
     const next = matches[i + 1];
-    if (next && next.price.currencyCode === price.currencyCode) {
+    const lends = next?.written && !current.written && current.family === next.family;
+    if (next && (next.price.currencyCode === price.currencyCode || lends)) {
       const between = text.slice(end, next.price.matchStart!);
       if (RANGE_BETWEEN.test(between) && next.price.amount > price.amount) {
-        out.push({ ...price, amountMax: next.price.amount, matchEnd: next.price.matchEnd });
+        const currency = lends
+          ? { currencyCode: next.price.currencyCode, inferred: next.price.inferred }
+          : {};
+        out.push({ ...price, ...currency, amountMax: next.price.amount, matchEnd: next.price.matchEnd });
         i++;
         continue;
       }
@@ -693,6 +740,23 @@ export function detectPriceFromText(text: string, resolve?: TokenResolver): Dete
   } catch {
     return null;
   }
+}
+
+/**
+ * How many prices a text writes in each currency without leaving room for
+ * doubt: `CDN$ 54.99`, `CAD 54.99`, `$49 CAD`. A bare `$`, `kr` or `¥` is not
+ * counted, since reading it is the question these counts help answer.
+ */
+export function writtenCurrencyCounts(text: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  if (!DIGIT_REGEX.test(text)) return counts;
+  for (const match of text.matchAll(GLOBAL_PRICE_REGEX)) {
+    const parsed = parseMatch(match, match.index ?? 0, undefined, undefined);
+    if (!parsed || (parsed.family && !parsed.written)) continue;
+    const code = parsed.price.currencyCode;
+    counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+  return counts;
 }
 
 /** Exposed for tests: the exact text a detector run would match. */

@@ -55,6 +55,12 @@ export const STORAGE = {
    * bring a first-run greeting back.
    */
   WELCOME_SEEN: 'welcomeSeen',
+  /**
+   * What each site's pages said about their currency. Outside the settings
+   * object for the same reason as the rates: the extension writes it, not the
+   * user, and a settings write must never race a page that is learning.
+   */
+  SITE_HINTS: 'siteCurrencyHints',
 } as const;
 
 export const DEFAULT_CURRENCIES = ['EUR', 'USD', 'GBP'];

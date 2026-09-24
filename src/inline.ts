@@ -57,7 +57,11 @@ const COMPACT_AT = 512;
 export interface InlineDeps {
   settings: () => Settings;
   rates: () => ExchangeRates | null;
-  resolver: () => TokenResolver | undefined;
+  /**
+   * How `$`, `kr` and `¥` read inside this element. Per element, not per page:
+   * the row a price sits in can name its currency (`Chinese Yuan … ¥ 69`).
+   */
+  resolver: (element: Element | null) => TokenResolver | undefined;
   /** A price was found in a currency the rate table does not price. */
   onUnpriced?: (code: string) => void;
 }
@@ -244,7 +248,6 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
     const rates = deps.rates();
     if (!rates) { resetQueue(); return; }
 
-    const resolve = deps.resolver();
     const base = settings.baseCurrency;
     const replacing = settings.inlineStyle === 'replace';
     const batch: Pending[] = [];
@@ -269,7 +272,7 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
       // original Text node then writes into the head while the orphaned tail
       // stays on screen, which shows the user its text twice. A missing badge
       // is a smaller loss than a broken page.
-      const price = detectAllFromText(text, resolve).find(
+      const price = detectAllFromText(text, deps.resolver(node.parentElement)).find(
         (p) => p.currencyCode !== base && p.matchEnd !== undefined && !text.slice(p.matchEnd).trim(),
       );
       if (!price) continue;
@@ -405,7 +408,10 @@ export function createInlineAnnotator(deps: InlineDeps): Annotator {
         'letter-spacing:normal;word-spacing:normal;' +
         'white-space:nowrap;unicode-bidi:isolate;' +
         'user-select:none;-webkit-user-select:none;'
-      : 'all:unset;font:inherit;font-size:0.85em;opacity:0.75;' +
+      // The page's own size, not a smaller one: a badge set in 0.85em read as a
+      // footnote beside the price it converts, and on a cramped line it was
+      // the one thing that did not look like the site.
+      : 'all:unset;font:inherit;opacity:0.75;' +
         'white-space:nowrap;unicode-bidi:isolate;margin-inline-start:0.35em;' +
         'user-select:none;-webkit-user-select:none;';
     badge.textContent = hidden ? label : `(${label})`;

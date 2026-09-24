@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
-  detectAllFromText, detectPriceFromText, normalizeAmount, setCryptoDetection,
+  detectAllFromText, detectPriceFromText, normalizeAmount, setCryptoDetection, writtenCurrencyCounts,
 } from './detector';
 import { makeTokenResolver } from './locale';
 
@@ -217,6 +217,70 @@ describe('page context resolves ambiguous tokens', () => {
 
   test('no resolver leaves the historical default', () => {
     expect(detectAllFromText('$49.99')[0].currencyCode).toBe('USD');
+  });
+
+  test('a lock is not reported as a guess', () => {
+    const resolve = makeTokenResolver('amazon.com', 'en', { locked: 'CAD' })!;
+    const [price] = detectAllFromText('$49.99', resolve);
+    expect([price.currencyCode, price.inferred]).toEqual(['CAD', undefined]);
+  });
+
+  test('a lock on one family leaves the others to the site', () => {
+    const resolve = makeTokenResolver('komplett.no', 'nb', { locked: 'CAD' })!;
+    const [kr] = detectAllFromText('1 099 kr', resolve);
+    expect([kr.currencyCode, kr.inferred]).toEqual(['NOK', true]);
+  });
+});
+
+describe('a code printed beside an ambiguous token', () => {
+  test('after it', () => {
+    const [price] = detectAllFromText('Total: $49.99 CAD');
+    expect([price.currencyCode, price.inferred, price.matchedText]).toEqual(['CAD', undefined, '$49.99 CAD']);
+  });
+
+  test('before it', () => {
+    const [price] = detectAllFromText('CAD $49.99');
+    expect([price.currencyCode, price.matchStart, price.matchedText]).toEqual(['CAD', 0, 'CAD $49.99']);
+  });
+
+  test('beats the site and the lock', () => {
+    const resolve = makeTokenResolver('amazon.com.au', 'en', { locked: 'NZD' })!;
+    expect(detectAllFromText('$49 CAD', resolve)[0].currencyCode).toBe('CAD');
+  });
+
+  test('works for kr and ¥', () => {
+    expect(detectAllFromText('1 099 kr NOK')[0].currencyCode).toBe('NOK');
+    expect(detectAllFromText('¥69 CNY')[0].currencyCode).toBe('CNY');
+  });
+
+  test('a code of another family is a stray word, not the currency', () => {
+    // `$49 EUR` is not a euro price, and `¥69 USD` is not a dollar one.
+    expect(detectAllFromText('$49 EUR')[0].currencyCode).toBe('USD');
+    expect(detectAllFromText('¥69 USD')[0].currencyCode).toBe('JPY');
+  });
+
+  test('a longer word starting like a code is not a code', () => {
+    expect(detectAllFromText('$49 CADDIE')[0].currencyCode).toBe('USD');
+  });
+
+  test('a code written once covers both ends of a range', () => {
+    const [price] = detectAllFromText('$10 – $20 CAD');
+    expect([price.currencyCode, price.amount, price.amountMax]).toEqual(['CAD', 10, 20]);
+  });
+
+  test('the code is not read a second time as its own price', () => {
+    expect(detectAllFromText('$49 CAD')).toHaveLength(1);
+  });
+});
+
+describe('writtenCurrencyCounts', () => {
+  test('counts prices that name their currency, never a bare token', () => {
+    const counts = writtenCurrencyCounts('CDN$ 54.99 · $40.04 · CAD 12.00 · $5 CAD · €3');
+    expect(Object.fromEntries(counts)).toEqual({ CAD: 3, EUR: 1 });
+  });
+
+  test('text without a digit counts nothing', () => {
+    expect(writtenCurrencyCounts('Canadian dollar CAD').size).toBe(0);
   });
 });
 

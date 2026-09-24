@@ -2,13 +2,19 @@ import { mount, unmount } from 'svelte';
 import { convertPrice } from '../src/convert';
 import { detectPricesFromElement, detectPriceFromText, setCryptoDetection } from '../src/detector';
 import { createInlineAnnotator, INLINE_ATTR } from '../src/inline';
-import { makeTokenResolver } from '../src/locale';
+import { FAMILIES, familyOfCode } from '../src/families';
+import type { FamilyChoice } from '../src/families';
+import { makeTokenResolver, pageChoice, regionChoice } from '../src/locale';
 import type { TokenResolver } from '../src/locale';
+import { collectPageSignals, rowContext } from '../src/page-signals';
+import { parseSiteHints, readSiteHint, rememberSiteHint } from '../src/site-hints';
 import { MESSAGE, send } from '../src/messages';
 import type { RefreshResult } from '../src/messages';
 import { isCryptoCode } from '../src/crypto';
 import { parseCryptoTable, parseRates } from '../src/rates';
-import { isActiveOn, loadSettings, wantsCrypto, watchSettings } from '../src/settings';
+import {
+  isActiveOn, loadSettings, lockedCurrency, normalizeHostname, wantsCrypto, watchSettings,
+} from '../src/settings';
 import type { Settings } from '../src/settings';
 import Tooltip from '../src/tooltip.svelte';
 import { getCardRect, hideTooltipState, moveTooltipState, showTooltipState } from '../src/tooltip-state';
@@ -188,13 +194,112 @@ export default defineContentScript({
 
     // ── Currency resolution from the page ────────────────────────────────────
 
+    // In order: the user's lock, the row a price sits in, the domain, what
+    // earlier pages of this site said. `src/locale.ts` explains the order.
+
+    const language = (): string => document.documentElement.lang || '';
+    /** What pages of this site said about their currency. Filled in shortly. */
+    let learned: FamilyChoice = {};
+
     let resolver: TokenResolver | undefined;
+    /** Row resolvers, per row element, keyed on the row's text like detections. */
+    let rowResolvers = new WeakMap<Element, { text: string; resolve: TokenResolver | undefined }>();
+
+    function sources(context?: FamilyChoice) {
+      return {
+        locked: lockedCurrency(settings, hostname),
+        usePage: settings.usePageContext,
+        learned,
+        context,
+      };
+    }
+
     function refreshResolver(): void {
-      resolver = settings.usePageContext
-        ? makeTokenResolver(hostname, document.documentElement.lang || '') ?? undefined
-        : undefined;
+      resolver = makeTokenResolver(hostname, language(), sources()) ?? undefined;
+      rowResolvers = new WeakMap();
     }
     refreshResolver();
+
+    /**
+     * The resolver for one element: the page's, unless the row around it names
+     * a currency. Only rows are asked, and only once per row text: most prices
+     * sit in no row, and most rows name nothing.
+     */
+    function resolverFor(element: Element | null): TokenResolver | undefined {
+      if (!element || !settings.usePageContext) return resolver;
+      const context = rowContext(element);
+      if (!context) return resolver;
+      const text = context.row.textContent ?? '';
+      const cached = rowResolvers.get(context.row);
+      if (cached && cached.text === text) return cached.resolve;
+      const resolve = makeTokenResolver(hostname, language(), sources(context.choice)) ?? undefined;
+      rowResolvers.set(context.row, { text, resolve });
+      return resolve;
+    }
+
+    /** Takes a new learned choice, and re-reads the page if it changes anything. */
+    function setLearned(next: FamilyChoice): void {
+      if (FAMILIES.every((family) => next[family] === learned[family])) return;
+      learned = next;
+      rereadPage();
+    }
+
+    /** Throws away everything read with the old resolver and reads it again. */
+    function rereadPage(): void {
+      refreshResolver();
+      detectionCache = new WeakMap();
+      clearHover();
+      hide();
+      annotator?.refresh();
+    }
+
+    /**
+     * Reads what the page says about its own currency, once, when the browser
+     * is idle, and remembers it for the site. Only for a family neither the
+     * lock nor the domain already answers: those outrank anything learned, so
+     * storing it would add a site to the list for nothing.
+     *
+     * Never in a private window. Chrome's extension storage is shared with the
+     * normal profile there, so a site learned in private would be listed, and
+     * kept, where the user can see it after the window is gone.
+     */
+    let pageRead = false;
+    function learnFromPage(): void {
+      if (!settings.usePageContext || chrome.extension?.inIncognitoContext) return;
+      pageRead = true;
+      const decided = new Set<string>(Object.keys(regionChoice(hostname, language())));
+      const locked = lockedCurrency(settings, hostname);
+      if (locked) decided.add(familyOfCode(locked) ?? '');
+      let choice: FamilyChoice;
+      try {
+        choice = pageChoice(collectPageSignals(document));
+      } catch (err) {
+        E('page currency read failed', err);
+        return;
+      }
+      for (const family of FAMILIES) if (decided.has(family)) delete choice[family];
+      if (!Object.keys(choice).length) return;
+      rememberSiteHint(hostname, choice)
+        .then((merged) => { if (merged) setLearned(merged); })
+        .catch((err) => E('site currency hint not saved', err));
+    }
+
+    /** Idle, and late: a shop's currency picker is often the last thing drawn. */
+    const LEARN_DELAY_MS = 2500;
+    let learnTimer: ReturnType<typeof setTimeout> | null = null;
+    function scheduleLearning(): void {
+      if (pageRead || learnTimer !== null) return;
+      learnTimer = setTimeout(() => {
+        learnTimer = null;
+        const run = (): void => { if (listening) learnFromPage(); };
+        if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 5000 });
+        else run();
+      }, LEARN_DELAY_MS);
+    }
+
+    readSiteHint(hostname)
+      .then(setLearned)
+      .catch(() => {});
 
     // ── Tooltip host, built on first use ─────────────────────────────────────
     // 60 kB of Svelte and a shadow root used to be mounted into every page the
@@ -245,7 +350,7 @@ export default defineContentScript({
       const cached = detectionCache.get(element);
       if (cached && cached.text === text) return cached.prices;
 
-      const prices = detectPricesFromElement(element, resolver);
+      const prices = detectPricesFromElement(element, resolverFor(element));
       detectionCache.set(element, { text, prices });
       return prices;
     }
@@ -605,7 +710,11 @@ export default defineContentScript({
           const text = selection.toString().trim();
           if (!text || text.length > 120) return;
 
-          const detected = detectPriceFromText(text, resolver);
+          const anchor = selection.getRangeAt(0).commonAncestorContainer;
+          const detected = detectPriceFromText(
+            text,
+            resolverFor(anchor instanceof Element ? anchor : anchor.parentElement),
+          );
           if (!detected || isOwnCurrency(detected)) return;
 
           const rect = selection.getRangeAt(0).getBoundingClientRect();
@@ -628,7 +737,7 @@ export default defineContentScript({
         annotator = createInlineAnnotator({
           settings: () => settings,
           rates: () => rates,
-          resolver: () => resolver,
+          resolver: resolverFor,
           // Inline never hovers anything, so this is its only way of saying it
           // met a crypto price. The refresh that follows re-runs the pass.
           onUnpriced: (code) => { if (notePrice(code)) void ensureRates(); },
@@ -657,6 +766,7 @@ export default defineContentScript({
       document.addEventListener('scroll', onViewportChange, { passive: true, capture: true });
       window.addEventListener('resize', onViewportChange, { passive: true });
       syncInlineMode();
+      scheduleLearning();
     }
 
     function stopListening(): void {
@@ -675,6 +785,7 @@ export default defineContentScript({
       annotator?.destroy();
       annotator = null;
       destroyTooltipHost();
+      if (learnTimer !== null) { clearTimeout(learnTimer); learnTimer = null; }
     }
 
     function applySettings(next: Settings): void {
@@ -696,6 +807,8 @@ export default defineContentScript({
       clearHover();
       hide();
       syncInlineMode();
+      // Page context may just have been switched on.
+      scheduleLearning();
     }
 
     const unwatch = watchSettings(applySettings);
@@ -725,6 +838,12 @@ export default defineContentScript({
         mergeRates();
         lastCryptoFailure = 0;
         annotator?.refresh();
+      }
+      if (changes[STORAGE.SITE_HINTS]) {
+        // Another tab learned this site, or the options page forgot it.
+        const hints = parseSiteHints(changes[STORAGE.SITE_HINTS].newValue);
+        const host = normalizeHostname(hostname);
+        setLearned(Object.hasOwn(hints, host) ? hints[host].c : {});
       }
       if (changes[STORAGE.CRYPTO_TS]) {
         const ts = changes[STORAGE.CRYPTO_TS].newValue;

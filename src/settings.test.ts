@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
-  DEFAULT_SETTINGS, defaultSettings, displayCurrencies, isActiveOn, isSiteDisabled, migrateLegacy,
-  normalizeHostname, parseHostnameInput, parseSettings, readSettings, updateSettings, wantsCrypto,
+  DEFAULT_SETTINGS, defaultSettings, displayCurrencies, isActiveOn, isLockableCode, isSiteDisabled,
+  lockedCurrency, migrateLegacy, normalizeHostname, parseHostnameInput, parseSettings, readSettings, updateSettings, wantsCrypto,
 } from './settings';
 import { STORAGE } from './types';
 
@@ -137,6 +137,38 @@ describe('site switches', () => {
     expect(isActiveOn(settings, 'example.com')).toBe(true);
     expect(isActiveOn(settings, 'amazon.ca')).toBe(false);
     expect(isActiveOn({ ...settings, enabled: false }, 'example.com')).toBe(false);
+  });
+});
+
+describe('locked sites', () => {
+  test('hosts are normalised and codes kept only when a token can stand for them', () => {
+    const raw = { 'WWW.Amazon.CA': 'CAD', 'shop.no': 'NOK', 'a.com': 'EUR', 'b.com': 'NOPE', 'c.com': 7 };
+    expect(parseSettings({ lockedSites: raw }).lockedSites).toEqual({ 'amazon.ca': 'CAD', 'shop.no': 'NOK' });
+  });
+
+  test('anything but an object is no locks at all', () => {
+    for (const value of [undefined, null, 'amazon.ca', ['amazon.ca'], 3]) {
+      expect(parseSettings({ lockedSites: value }).lockedSites).toEqual({});
+    }
+  });
+
+  test('a lock is looked up the way a pause is', () => {
+    const settings = { ...DEFAULT_SETTINGS, lockedSites: { 'amazon.ca': 'AUD' } };
+    expect(lockedCurrency(settings, 'www.amazon.ca')).toBe('AUD');
+    expect(lockedCurrency(settings, 'smile.amazon.ca')).toBeNull();
+    // An inherited key is not a site the user locked.
+    expect(lockedCurrency(settings, 'constructor')).toBeNull();
+  });
+
+  test('only a code of the $, kr or ¥ families can be locked', () => {
+    expect(['USD', 'CAD', 'NOK', 'CNY'].every(isLockableCode)).toBe(true);
+    expect(['EUR', 'GBP', 'BTC', '', 5].some(isLockableCode)).toBe(false);
+  });
+
+  test('a proxied map reaches storage as a plain object', () => {
+    const proxied = new Proxy({ 'amazon.ca': 'CAD' }, {});
+    const stored = JSON.parse(JSON.stringify(parseSettings({ lockedSites: proxied })));
+    expect(parseSettings(stored).lockedSites).toEqual({ 'amazon.ca': 'CAD' });
   });
 });
 
