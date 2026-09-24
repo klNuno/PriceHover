@@ -35,11 +35,21 @@ const PAGE_PERMISSION: chrome.permissions.Permissions = { origins: ['<all_urls>'
  */
 export async function hasPageAccess(): Promise<boolean> {
   try {
-    return await chrome.permissions.contains(PAGE_PERMISSION);
+    if (await chrome.permissions.contains(PAGE_PERMISSION)) return true;
+    // Chrome answers `contains` from the explicit host list alone, and the
+    // content script's matches are never on it: `<all_urls>` lives in
+    // `optional_host_permissions`, so a fresh install that runs everywhere
+    // answered false and got the banner. `getAll` reports what is actually
+    // active, content script origins included, and drops them once withheld.
+    const { origins = [] } = await chrome.permissions.getAll();
+    return origins.some((origin) => BROAD_ORIGINS.has(origin));
   } catch {
     return true;
   }
 }
+
+/** Patterns that mean "every page", in the spellings the browsers report. */
+const BROAD_ORIGINS = new Set(['<all_urls>', '*://*/*']);
 
 /** Same gesture rule as the crypto request below: call it straight from the click. */
 export async function requestPageAccess(): Promise<boolean> {
