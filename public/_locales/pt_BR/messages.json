@@ -87,7 +87,7 @@
     "message": "Abrir configurações"
   },
   "tooltipInferred": {
-    "message": "Moeda deduzida do país deste site"
+    "message": "Moeda deduzida do site, não do preço"
   },
   "tooltipCopyHint": {
     "message": "Clique para copiar"
@@ -168,10 +168,10 @@
     "message": "Só o meu"
   },
   "pageContext": {
-    "message": "Ler $$, kr e ¥ conforme o país do site"
+    "message": "Ler $$, kr e ¥ conforme o site"
   },
   "pageContextHelp": {
-    "message": "Em .ca, $$ é dólar canadense. Desligado, $$ e kr valem USD e SEK."
+    "message": "Em .ca, $$ é dólar canadense. Uma linha de tabela ou página que nomeia sua moeda (CNY, CAD) é considerada, e a página fica lembrada para o site. Desligado, só valem seus bloqueios."
   },
   "enabledEverywhere": {
     "message": "Ativado"
@@ -203,11 +203,41 @@
   "invalidSite": {
     "message": "Isso não é um endereço de site. Tente exemplo.com."
   },
+  "siteAction": {
+    "message": "Neste site"
+  },
+  "siteActionPause": {
+    "message": "Pausar"
+  },
+  "siteActionLock": {
+    "message": "Fixar a moeda"
+  },
+  "siteLockCurrency": {
+    "message": "Moeda para $$, kr ou ¥"
+  },
+  "lockedSites": {
+    "message": "Moedas fixadas"
+  },
+  "lockedSitesHelp": {
+    "message": "Nestes sites o símbolo sempre é a moeda escolhida, não importa o que a página sugira."
+  },
+  "lockedSitesEmpty": {
+    "message": "Nenhuma moeda fixada."
+  },
+  "learnedSites": {
+    "message": "Lido nos sites"
+  },
+  "learnedSitesHelp": {
+    "message": "A moeda que as páginas do site nomeiam, lembrada só neste dispositivo. O domínio e seus bloqueios vêm antes."
+  },
+  "learnedSitesEmpty": {
+    "message": "Nada lido ainda."
+  },
   "reset": {
     "message": "Restaurar padrões"
   },
   "resetWarning": {
-    "message": "Isso apaga todas as configurações, inclusive seus sites pausados. Não dá para desfazer."
+    "message": "Isso apaga todas as configurações, inclusive sites pausados e bloqueados e o que foi aprendido dos sites. Não dá para desfazer."
   },
   "resetConfirm": {
     "message": "Confirmar restauração"

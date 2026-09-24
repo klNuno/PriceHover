@@ -87,7 +87,7 @@
     "message": "Abrir ajustes"
   },
   "tooltipInferred": {
-    "message": "Moneda deducida del país de este sitio"
+    "message": "Moneda deducida del sitio, no del precio"
   },
   "tooltipCopyHint": {
     "message": "Clic para copiar"
@@ -168,10 +168,10 @@
     "message": "Solo el mío"
   },
   "pageContext": {
-    "message": "Leer $$, kr y ¥ según el país del sitio"
+    "message": "Leer $$, kr y ¥ según el sitio"
   },
   "pageContextHelp": {
-    "message": "En .ca, $$ es dólar canadiense. Desactivado, $$ y kr son USD y SEK."
+    "message": "En .ca, $$ es dólar canadiense. Una fila o una página que nombra su moneda (CNY, CAD) se tiene en cuenta, y la página se recuerda para el sitio. Desactivado, solo cuentan tus bloqueos."
   },
   "enabledEverywhere": {
     "message": "Activado"
@@ -203,11 +203,41 @@
   "invalidSite": {
     "message": "Eso no es una dirección de sitio. Prueba ejemplo.com."
   },
+  "siteAction": {
+    "message": "En este sitio"
+  },
+  "siteActionPause": {
+    "message": "Pausar"
+  },
+  "siteActionLock": {
+    "message": "Fijar la moneda"
+  },
+  "siteLockCurrency": {
+    "message": "Moneda para $$, kr o ¥"
+  },
+  "lockedSites": {
+    "message": "Monedas fijadas"
+  },
+  "lockedSitesHelp": {
+    "message": "En estos sitios el símbolo siempre es la moneda elegida, diga lo que diga la página."
+  },
+  "lockedSitesEmpty": {
+    "message": "Ninguna moneda fijada."
+  },
+  "learnedSites": {
+    "message": "Leído en los sitios"
+  },
+  "learnedSitesHelp": {
+    "message": "La moneda que nombran las páginas del sitio, recordada solo en este dispositivo. El dominio y tus bloqueos van primero."
+  },
+  "learnedSitesEmpty": {
+    "message": "Nada leído todavía."
+  },
   "reset": {
     "message": "Restablecer"
   },
   "resetWarning": {
-    "message": "Esto borra todos los ajustes, incluidos tus sitios pausados. No se puede deshacer."
+    "message": "Esto borra todos los ajustes, incluidos tus sitios pausados y bloqueados y lo aprendido de los sitios. No se puede deshacer."
   },
   "resetConfirm": {
     "message": "Confirmar restablecimiento"

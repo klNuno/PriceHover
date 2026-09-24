@@ -87,7 +87,7 @@
     "message": "Open settings"
   },
   "tooltipInferred": {
-    "message": "Currency read from this site’s country"
+    "message": "Currency read from the site, not from the price"
   },
   "tooltipCopyHint": {
     "message": "Click to copy"
@@ -168,10 +168,10 @@
     "message": "Mine only"
   },
   "pageContext": {
-    "message": "Read $$, kr and ¥ from the site’s country"
+    "message": "Read $$, kr and ¥ from the site"
   },
   "pageContextHelp": {
-    "message": "On .ca, $$ is Canadian. Off, $$ and kr always mean USD and SEK."
+    "message": "On .ca, $$ is Canadian. A table row or a page that names its currency (CNY, CAD) is believed, and the page is remembered for the site. Off, only your locks apply."
   },
   "enabledEverywhere": {
     "message": "Enabled"
@@ -203,11 +203,41 @@
   "invalidSite": {
     "message": "That is not a site address. Try example.com."
   },
+  "siteAction": {
+    "message": "On this site"
+  },
+  "siteActionPause": {
+    "message": "Pause"
+  },
+  "siteActionLock": {
+    "message": "Lock the currency"
+  },
+  "siteLockCurrency": {
+    "message": "Currency for $$, kr or ¥"
+  },
+  "lockedSites": {
+    "message": "Locked currencies"
+  },
+  "lockedSitesHelp": {
+    "message": "On these sites the symbol always means the currency you chose, whatever the page suggests."
+  },
+  "lockedSitesEmpty": {
+    "message": "No currency is locked."
+  },
+  "learnedSites": {
+    "message": "Read from the sites"
+  },
+  "learnedSitesHelp": {
+    "message": "The currency a site’s own pages named, remembered on this device only. The domain and your locks come first."
+  },
+  "learnedSitesEmpty": {
+    "message": "Nothing read yet."
+  },
   "reset": {
     "message": "Reset to defaults"
   },
   "resetWarning": {
-    "message": "This clears every setting, including your paused sites. It cannot be undone."
+    "message": "This clears every setting, including your paused and locked sites and what sites taught it. It cannot be undone."
   },
   "resetConfirm": {
     "message": "Confirm reset"

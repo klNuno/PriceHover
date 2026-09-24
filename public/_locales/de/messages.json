@@ -87,7 +87,7 @@
     "message": "Einstellungen öffnen"
   },
   "tooltipInferred": {
-    "message": "Währung aus dem Land dieser Website abgeleitet"
+    "message": "Währung aus der Website abgeleitet, nicht aus dem Preis"
   },
   "tooltipCopyHint": {
     "message": "Zum Kopieren klicken"
@@ -168,10 +168,10 @@
     "message": "Nur meinen"
   },
   "pageContext": {
-    "message": "$$, kr und ¥ nach dem Land der Website lesen"
+    "message": "$$, kr und ¥ anhand der Website lesen"
   },
   "pageContextHelp": {
-    "message": "Auf .ca ist $$ kanadisch. Aus heißen $$ und kr immer USD und SEK."
+    "message": "Auf .ca ist $$ kanadisch. Eine Tabellenzeile oder Seite, die ihre Währung nennt (CNY, CAD), gilt, und die Seite wird für die Website gemerkt. Aus gelten nur Ihre Festlegungen."
   },
   "enabledEverywhere": {
     "message": "Aktiviert"
@@ -203,11 +203,41 @@
   "invalidSite": {
     "message": "Das ist keine Website-Adresse. Versuchen Sie beispiel.de."
   },
+  "siteAction": {
+    "message": "Auf dieser Website"
+  },
+  "siteActionPause": {
+    "message": "Pausieren"
+  },
+  "siteActionLock": {
+    "message": "Währung festlegen"
+  },
+  "siteLockCurrency": {
+    "message": "Währung für $$, kr oder ¥"
+  },
+  "lockedSites": {
+    "message": "Festgelegte Währungen"
+  },
+  "lockedSitesHelp": {
+    "message": "Auf diesen Websites steht das Symbol immer für die gewählte Währung, egal was die Seite nahelegt."
+  },
+  "lockedSitesEmpty": {
+    "message": "Keine Währung festgelegt."
+  },
+  "learnedSites": {
+    "message": "Von den Websites gelesen"
+  },
+  "learnedSitesHelp": {
+    "message": "Die Währung, die die Seiten der Website nennen, nur auf diesem Gerät gemerkt. Domain und Ihre Festlegungen haben Vorrang."
+  },
+  "learnedSitesEmpty": {
+    "message": "Noch nichts gelesen."
+  },
   "reset": {
     "message": "Zurücksetzen"
   },
   "resetWarning": {
-    "message": "Das löscht alle Einstellungen, auch Ihre pausierten Websites. Es lässt sich nicht rückgängig machen."
+    "message": "Das löscht alle Einstellungen, auch pausierte und festgelegte Websites und das von Websites Gelernte. Es lässt sich nicht rückgängig machen."
   },
   "resetConfirm": {
     "message": "Zurücksetzen bestätigen"

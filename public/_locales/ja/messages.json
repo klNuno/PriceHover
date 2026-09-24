@@ -87,7 +87,7 @@
     "message": "設定を開く"
   },
   "tooltipInferred": {
-    "message": "サイトの国から通貨を推定しました"
+    "message": "価格ではなくサイトから通貨を推定しました"
   },
   "tooltipCopyHint": {
     "message": "クリックでコピー"
@@ -168,10 +168,10 @@
     "message": "自国通貨のみ"
   },
   "pageContext": {
-    "message": "サイトの国に応じて $$・kr・¥ を解釈する"
+    "message": "サイトに応じて $$・kr・¥ を解釈する"
   },
   "pageContextHelp": {
-    "message": ".ca では $$ をカナダドルと解釈。オフなら $$ と kr は常に USD と SEK です。"
+    "message": ".ca では $$ をカナダドルと解釈。通貨名（CNY、CAD）を示す表の行やページに従い、ページの情報はサイトごとに記憶します。オフなら固定したサイトだけが対象です。"
   },
   "enabledEverywhere": {
     "message": "有効"
@@ -203,11 +203,41 @@
   "invalidSite": {
     "message": "サイトのアドレスではありません。example.com のように入力してください。"
   },
+  "siteAction": {
+    "message": "このサイトでは"
+  },
+  "siteActionPause": {
+    "message": "一時停止"
+  },
+  "siteActionLock": {
+    "message": "通貨を固定"
+  },
+  "siteLockCurrency": {
+    "message": "$$・kr・¥ の通貨"
+  },
+  "lockedSites": {
+    "message": "固定した通貨"
+  },
+  "lockedSitesHelp": {
+    "message": "これらのサイトでは、ページの内容にかかわらず記号を選んだ通貨として扱います。"
+  },
+  "lockedSitesEmpty": {
+    "message": "固定した通貨はありません。"
+  },
+  "learnedSites": {
+    "message": "サイトから読み取った通貨"
+  },
+  "learnedSitesHelp": {
+    "message": "サイトのページが示した通貨を、この端末にだけ記憶します。ドメインと固定した通貨が優先されます。"
+  },
+  "learnedSitesEmpty": {
+    "message": "まだありません。"
+  },
   "reset": {
     "message": "初期設定に戻す"
   },
   "resetWarning": {
-    "message": "一時停止中のサイトを含め、すべての設定が消えます。元に戻せません。"
+    "message": "一時停止・固定したサイトやサイトから学んだ内容を含め、すべての設定が消えます。元に戻せません。"
   },
   "resetConfirm": {
     "message": "リセットを確認"

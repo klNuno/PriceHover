@@ -87,7 +87,7 @@
     "message": "Ouvrir les réglages"
   },
   "tooltipInferred": {
-    "message": "Devise déduite du pays de ce site"
+    "message": "Devise déduite du site, pas du prix"
   },
   "tooltipCopyHint": {
     "message": "Cliquer pour copier"
@@ -168,10 +168,10 @@
     "message": "Le mien seulement"
   },
   "pageContext": {
-    "message": "Lire $$, kr et ¥ selon le pays du site"
+    "message": "Lire $$, kr et ¥ d’après le site"
   },
   "pageContextHelp": {
-    "message": "Sur .ca, $$ vaut dollar canadien. Désactivé, $$ et kr valent USD et SEK."
+    "message": "Sur .ca, $$ vaut dollar canadien. Une ligne de tableau ou une page qui nomme sa devise (CNY, CAD) est crue, et la page est retenue pour le site. Désactivé, seuls vos verrous comptent."
   },
   "enabledEverywhere": {
     "message": "Activé"
@@ -203,11 +203,41 @@
   "invalidSite": {
     "message": "Ce n’est pas une adresse de site. Essayez exemple.com."
   },
+  "siteAction": {
+    "message": "Sur ce site"
+  },
+  "siteActionPause": {
+    "message": "Suspendre"
+  },
+  "siteActionLock": {
+    "message": "Verrouiller la devise"
+  },
+  "siteLockCurrency": {
+    "message": "Devise pour $$, kr ou ¥"
+  },
+  "lockedSites": {
+    "message": "Devises verrouillées"
+  },
+  "lockedSitesHelp": {
+    "message": "Sur ces sites, le symbole vaut toujours la devise choisie, quoi que suggère la page."
+  },
+  "lockedSitesEmpty": {
+    "message": "Aucune devise verrouillée."
+  },
+  "learnedSites": {
+    "message": "Lu sur les sites"
+  },
+  "learnedSitesHelp": {
+    "message": "La devise nommée par les pages du site, retenue sur cet appareil uniquement. Le domaine et vos verrous passent avant."
+  },
+  "learnedSitesEmpty": {
+    "message": "Rien de lu pour l’instant."
+  },
   "reset": {
     "message": "Réinitialiser"
   },
   "resetWarning": {
-    "message": "Cela efface tous les réglages, y compris vos sites suspendus. C’est irréversible."
+    "message": "Cela efface tous les réglages, y compris vos sites suspendus et verrouillés et ce que les sites lui ont appris. C’est irréversible."
   },
   "resetConfirm": {
     "message": "Confirmer la réinitialisation"

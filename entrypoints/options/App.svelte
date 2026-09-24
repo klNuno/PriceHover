@@ -2,6 +2,8 @@
   import { onDestroy, onMount } from 'svelte';
   import { CRYPTO_ASSETS } from '../../src/crypto';
   import { ASSET_BY_CODE, CURRENCIES, CURRENCY_BY_CODE, flagToCountryCode } from '../../src/currencies';
+  import { FAMILIES, FAMILY_CODES, familyOfCode } from '../../src/families';
+  import type { FamilyChoice } from '../../src/families';
   import { flagImage } from '../../src/flags';
   import {
     dropCryptoAccess, hasCryptoAccess, hasPageAccess, requestCryptoAccess, requestPageAccess,
@@ -16,6 +18,8 @@
     watchSettings,
   } from '../../src/settings';
   import type { InlineStyle, Rounding, Settings, SettingsPatch } from '../../src/settings';
+  import { forgetAllSiteHints, forgetSiteHint, parseSiteHints, readSiteHints } from '../../src/site-hints';
+  import type { SiteHints } from '../../src/site-hints';
   import { formatAgo } from '../../src/time';
   import { CRYPTO_STALE_AFTER_MS, STALE_AFTER_MS, STORAGE } from '../../src/types';
 
@@ -32,6 +36,11 @@
   let error = $state('');
   let siteError = $state('');
   let addSite = $state('');
+  /** What the add form does with the site: pause it, or lock a currency on it. */
+  let siteMode = $state<'pause' | 'lock'>('pause');
+  let lockCode = $state('CAD');
+  /** What pages taught the content script, per site. Written there, shown here. */
+  let siteHints = $state<SiteHints>({});
   let currencyFilter = $state('');
   let showWelcome = $state(false);
   let confirmingReset = $state(false);
@@ -44,6 +53,7 @@
   const version = chrome.runtime.getManifest().version;
   let unwatch: (() => void) | null = null;
   let unwatchRates: (() => void) | null = null;
+  let unwatchHints: (() => void) | null = null;
 
   onMount(async () => {
     // The page ships in eight locales, so the document language cannot be a
@@ -76,6 +86,7 @@
         if (key === STORAGE.RATES_TS) ratesTimestamp = next;
         else cryptoTimestamp = next;
       });
+      unwatchHints = watchSiteHints((next) => { siteHints = next; });
     } catch (e) {
       console.error('[PH] cannot watch storage', e);
     }
@@ -102,11 +113,17 @@
       console.error('[PH] rates timestamp read failed', e);
     }
 
+    try {
+      siteHints = await readSiteHints();
+    } catch (e) {
+      console.error('[PH] site hints read failed', e);
+    }
+
     cryptoGranted = await hasCryptoAccess();
     pageAccess = await hasPageAccess();
   });
 
-  onDestroy(() => { unwatch?.(); unwatchRates?.(); unwatchCrypto?.(); });
+  onDestroy(() => { unwatch?.(); unwatchRates?.(); unwatchHints?.(); unwatchCrypto?.(); });
 
   // A permission taken away from the browser's own panel never passes through
   // this page, and the switch would sit there saying "on".
@@ -119,6 +136,16 @@
         if (!changes[key]) continue;
         const next = changes[key].newValue;
         onChange(key, typeof next === 'number' ? next : 0);
+      }
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }
+
+  function watchSiteHints(onChange: (hints: SiteHints) => void): () => void {
+    const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, areaName) => {
+      if (areaName === 'local' && changes[STORAGE.SITE_HINTS]) {
+        onChange(parseSiteHints(changes[STORAGE.SITE_HINTS].newValue));
       }
     };
     chrome.storage.onChanged.addListener(listener);
@@ -238,7 +265,7 @@
     });
   }
 
-  function pauseSite(): void {
+  function submitSite(): void {
     if (!addSite.trim()) return;
     // A port, a space or a stray path can never match `location.hostname`, so
     // the entry would sit in the list looking effective and pausing nothing.
@@ -247,6 +274,11 @@
 
     siteError = '';
     addSite = '';
+    if (siteMode === 'lock') {
+      const code = lockCode;
+      void update((current) => ({ lockedSites: { ...current.lockedSites, [host]: code } }));
+      return;
+    }
     void update((current) => ({
       disabledSites: current.disabledSites.includes(host)
         ? current.disabledSites
@@ -257,6 +289,41 @@
   function resumeSite(host: string): void {
     void update((current) => ({ disabledSites: current.disabledSites.filter((s) => s !== host) }));
   }
+
+  function unlockSite(host: string): void {
+    void update((current) => ({
+      lockedSites: Object.fromEntries(Object.entries(current.lockedSites).filter(([h]) => h !== host)),
+    }));
+  }
+
+  function forgetSite(host: string): void {
+    forgetSiteHint(host).catch((e) => {
+      console.error('[PH] site hint not removed', e);
+      error = t('saveFailed');
+    });
+  }
+
+  /** `$ = CAD`, the way the choice reads on the page. */
+  function describeLock(code: string): string {
+    return `${familyOfCode(code) ?? ''} = ${code}`;
+  }
+
+  function describeChoice(choice: FamilyChoice): string {
+    return FAMILIES.filter((family) => choice[family])
+      .map((family) => `${family} = ${choice[family]}`)
+      .join(' · ');
+  }
+
+  const lockedList = $derived(
+    Object.entries(settings.lockedSites).sort(([a], [b]) => a.localeCompare(b))
+  );
+  const learnedList = $derived(
+    Object.entries(siteHints)
+      .sort(([, a], [, b]) => b.t - a.t)
+      .map(([host, hint]) => [host, hint.c] as const)
+  );
+  const SITE_MODES = ['pause', 'lock'] as const;
+  const siteModeLabel = { pause: 'siteActionPause', lock: 'siteActionLock' } as const;
 
   async function refresh(): Promise<void> {
     refreshing = true;
@@ -291,6 +358,7 @@
   function confirmReset(): void {
     confirmingReset = false;
     void update(defaultSettings());
+    forgetAllSiteHints().catch((e) => console.error('[PH] site hints not cleared', e));
   }
 
   /**
@@ -525,11 +593,29 @@
           <li class="muted">{t('pausedSitesEmpty')}</li>
         {/each}
       </ul>
-      <form class="add-site" onsubmit={(e) => { e.preventDefault(); pauseSite(); }}>
+      <span class="label list-label">{t('lockedSites')}</span>
+      <p class="help">{t('lockedSitesHelp')}</p>
+      <ul class="sites">
+        {#each lockedList as [host, code] (host)}
+          <li>
+            <span class="host">{host}</span>
+            <span class="lock">{describeLock(code)}</span>
+            <button
+              class="icon" type="button"
+              title={t('remove')} aria-label={`${t('remove')}: ${host}`}
+              onclick={() => unlockSite(host)}
+            ><span aria-hidden="true">✕</span></button>
+          </li>
+        {:else}
+          <li class="muted">{t('lockedSitesEmpty')}</li>
+        {/each}
+      </ul>
+
+      <form class="add-site" onsubmit={(e) => { e.preventDefault(); submitSite(); }}>
         <input
           type="text"
           placeholder={t('addSitePlaceholder')}
-          aria-label={t('pausedSites')}
+          aria-label={t('sectionSites')}
           aria-invalid={siteError ? 'true' : undefined}
           aria-describedby={siteError ? 'add-site-error' : undefined}
           bind:value={addSite}
@@ -537,8 +623,55 @@
         />
         <button class="primary" type="submit">{t('add')}</button>
       </form>
+      <div class="site-mode">
+        <div class="segments" role="radiogroup" aria-label={t('siteAction')}>
+          {#each SITE_MODES as mode, index (mode)}
+            <button
+              type="button"
+              role="radio"
+              class:on={siteMode === mode}
+              aria-checked={siteMode === mode}
+              tabindex={siteMode === mode ? 0 : -1}
+              onclick={() => (siteMode = mode)}
+              onkeydown={(e) => onSegmentKeydown(e, index, SITE_MODES.length,
+                (next) => (siteMode = SITE_MODES[next]))}
+            >{t(siteModeLabel[mode])}</button>
+          {/each}
+        </div>
+        {#if siteMode === 'lock'}
+          <select aria-label={t('siteLockCurrency')} bind:value={lockCode}>
+            {#each FAMILIES as family (family)}
+              <optgroup label={family}>
+                {#each FAMILY_CODES[family] as code (code)}
+                  <option value={code}>{family} = {code} · {CURRENCY_BY_CODE.get(code)?.name ?? code}</option>
+                {/each}
+              </optgroup>
+            {/each}
+          </select>
+        {/if}
+      </div>
       {#if siteError}
         <p class="field-error" id="add-site-error" role="alert">{siteError}</p>
+      {/if}
+
+      {#if settings.usePageContext || learnedList.length}
+        <span class="label list-label">{t('learnedSites')}</span>
+        <p class="help">{t('learnedSitesHelp')}</p>
+        <ul class="sites">
+          {#each learnedList as [host, choice] (host)}
+            <li>
+              <span class="host">{host}</span>
+              <span class="lock">{describeChoice(choice)}</span>
+              <button
+                class="icon" type="button"
+                title={t('remove')} aria-label={`${t('remove')}: ${host}`}
+                onclick={() => forgetSite(host)}
+              ><span aria-hidden="true">✕</span></button>
+            </li>
+          {:else}
+            <li class="muted">{t('learnedSitesEmpty')}</li>
+          {/each}
+        </ul>
       {/if}
     </section>
     </div>
@@ -904,7 +1037,13 @@
     font-size: 12.5px; font-weight: 620; font-variant-numeric: tabular-nums;
   }
 
-  .add-site { display: flex; gap: 8px; margin-top: 10px; }
+  .add-site { display: flex; gap: 8px; margin-top: 14px; }
+  .site-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+  .site-mode select { flex: 1 1 180px; }
+  /* A list after the first one needs air above it, or its label reads as the
+     last row of the list before. */
+  .list-label { margin-top: 18px; }
+  .lock { font-weight: 650; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .field-error { margin-top: 8px; font-size: 12.5px; color: var(--danger); }
 
   .reset-warning { margin-top: 14px; font-size: 12.5px; color: var(--danger); }

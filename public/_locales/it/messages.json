@@ -87,7 +87,7 @@
     "message": "Apri impostazioni"
   },
   "tooltipInferred": {
-    "message": "Valuta dedotta dal paese di questo sito"
+    "message": "Valuta dedotta dal sito, non dal prezzo"
   },
   "tooltipCopyHint": {
     "message": "Clicca per copiare"
@@ -168,10 +168,10 @@
     "message": "Solo il mio"
   },
   "pageContext": {
-    "message": "Leggere $$, kr e ¥ in base al paese del sito"
+    "message": "Leggere $$, kr e ¥ in base al sito"
   },
   "pageContextHelp": {
-    "message": "Su .ca, $$ è dollaro canadese. Disattivato, $$ e kr valgono USD e SEK."
+    "message": "Su .ca, $$ è dollaro canadese. Una riga o una pagina che nomina la sua valuta (CNY, CAD) viene creduta, e la pagina è ricordata per il sito. Disattivato, valgono solo i tuoi blocchi."
   },
   "enabledEverywhere": {
     "message": "Attivato"
@@ -203,11 +203,41 @@
   "invalidSite": {
     "message": "Non è un indirizzo di sito. Prova esempio.com."
   },
+  "siteAction": {
+    "message": "Su questo sito"
+  },
+  "siteActionPause": {
+    "message": "Sospendere"
+  },
+  "siteActionLock": {
+    "message": "Bloccare la valuta"
+  },
+  "siteLockCurrency": {
+    "message": "Valuta per $$, kr o ¥"
+  },
+  "lockedSites": {
+    "message": "Valute bloccate"
+  },
+  "lockedSitesHelp": {
+    "message": "Su questi siti il simbolo vale sempre la valuta scelta, qualunque cosa suggerisca la pagina."
+  },
+  "lockedSitesEmpty": {
+    "message": "Nessuna valuta bloccata."
+  },
+  "learnedSites": {
+    "message": "Letto dai siti"
+  },
+  "learnedSitesHelp": {
+    "message": "La valuta nominata dalle pagine del sito, ricordata solo su questo dispositivo. Il dominio e i tuoi blocchi vengono prima."
+  },
+  "learnedSitesEmpty": {
+    "message": "Ancora niente."
+  },
   "reset": {
     "message": "Ripristina"
   },
   "resetWarning": {
-    "message": "Questo cancella tutte le impostazioni, inclusi i siti sospesi. Non è reversibile."
+    "message": "Questo cancella tutte le impostazioni, inclusi i siti sospesi e bloccati e ciò che ha appreso dai siti. Non è reversibile."
   },
   "resetConfirm": {
     "message": "Conferma ripristino"

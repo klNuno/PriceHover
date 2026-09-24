@@ -87,7 +87,7 @@
     "message": "打开设置"
   },
   "tooltipInferred": {
-    "message": "根据网站所属国家推断货币"
+    "message": "货币根据网站推断，而非价格本身"
   },
   "tooltipCopyHint": {
     "message": "点击复制"
@@ -168,10 +168,10 @@
     "message": "只显示我的"
   },
   "pageContext": {
-    "message": "根据网站所属国家解读 $$、kr 和 ¥"
+    "message": "根据网站解读 $$、kr 和 ¥"
   },
   "pageContextHelp": {
-    "message": "在 .ca 上 $$ 表示加元。关闭后 $$ 和 kr 一律视为 USD 和 SEK。"
+    "message": "在 .ca 上 $$ 表示加元。表格行或页面写明货币（CNY、CAD）时以其为准，并按网站记住。关闭后只有你锁定的网站生效。"
   },
   "enabledEverywhere": {
     "message": "已启用"
@@ -203,11 +203,41 @@
   "invalidSite": {
     "message": "这不是网站地址。请尝试 example.com。"
   },
+  "siteAction": {
+    "message": "在此网站上"
+  },
+  "siteActionPause": {
+    "message": "暂停"
+  },
+  "siteActionLock": {
+    "message": "锁定货币"
+  },
+  "siteLockCurrency": {
+    "message": "$$、kr 或 ¥ 的货币"
+  },
+  "lockedSites": {
+    "message": "已锁定的货币"
+  },
+  "lockedSitesHelp": {
+    "message": "在这些网站上，无论页面如何提示，该符号始终表示你选择的货币。"
+  },
+  "lockedSitesEmpty": {
+    "message": "没有锁定的货币。"
+  },
+  "learnedSites": {
+    "message": "从网站读取"
+  },
+  "learnedSitesHelp": {
+    "message": "网站页面写明的货币，仅保存在本设备上。域名和你的锁定优先。"
+  },
+  "learnedSitesEmpty": {
+    "message": "暂无内容。"
+  },
   "reset": {
     "message": "恢复默认"
   },
   "resetWarning": {
-    "message": "这会清除所有设置，包括已暂停的网站，且无法撤销。"
+    "message": "这会清除所有设置，包括已暂停和已锁定的网站以及从网站学到的内容，且无法撤销。"
   },
   "resetConfirm": {
     "message": "确认恢复默认"
