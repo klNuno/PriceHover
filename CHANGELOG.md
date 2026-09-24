@@ -74,6 +74,68 @@ does not get to relayout the site, so it is now inserted, measured, and taken
 back if the text it annotates grew taller than a browser's rounding. The hover
 still answers on those prices.
 
+The badge is also set in the page's own size now. At 0.85em it read as a
+footnote beside the price it converts.
+
+### `$`, `kr` and `¥` read from the page, not only from the domain
+
+A domain says which market a site sells to, and most sites have no market
+domain at all. The page itself usually says more, in more or less trustworthy
+places, and they are now believed in this order:
+
+1. **A code printed beside the token.** `$49.99 CAD` and `CAD $49.99` are
+   Canadian prices, wherever they are, and are not flagged as a guess.
+2. **Your lock for the site** (below).
+3. **The row the price sits in.** SteamDB lists every region on one page, so a
+   `¥ 69` on the Chinese Yuan row was read as yen, like the `¥ 1,980` two rows
+   down. A table row or list item that names exactly one currency of the
+   token's family, by code or by name, now decides for the prices in it. A row
+   that already prints that currency unambiguously (`CDN$ 54.99` beside a bare
+   `$40.04`) does not, since there the bare `$` is the US conversion.
+4. **The domain and `<html lang>`**, as before.
+5. **What pages of the same site said.** A page that states its currency
+   clearly (a declared `og:price:currency` or `priceCurrency`, prices written
+   with their code, a picker showing `CAD`) is remembered for the whole site,
+   so the next page, which rarely repeats it, reads its `$` the same way. It
+   takes a clear winner: a page that lists a dozen currencies, as SteamDB
+   does, teaches nothing. Currency names in prose do not count, and neither
+   does a country: a US store shipping to Canada still prices in dollars.
+
+Remembered sites are listed in the settings, each removable, and the list is
+kept on the device only, capped at 300 sites, and never written from a private
+window, where Chrome shares extension storage with the normal profile. The
+tooltip's note now reads "Currency read from the site, not from the price",
+since the domain is no longer the only source.
+
+### A site's currency can be locked
+
+The Sites list now takes a second kind of entry. Beside "Pause", "Lock the
+currency" fixes what `$`, `kr` or `¥` means on that site: `amazon.com` with
+`$ = CAD` reads every bare dollar there as Canadian. A lock beats every guess
+and holds with page reading switched off, because it is not a guess, and the
+tooltip does not flag it as one. Only a code printed beside the price (`$49
+USD`) overrides it.
+
+### The popup calculator reads crypto
+
+`0.5 btc`, `100 eur eth` and `3 solana` convert once crypto is on, for all
+twenty-four assets, including those a page is not trusted with. A long round
+amount is fine here, since the user typed the code: on a page `ETH 8092` is a
+Zurich postcode, in the calculator it is what was asked. Fiat keeps every word
+it had, so `sol` is still the Peruvian sol and Solana is typed `solana`. A
+crypto amount typed there fetches the crypto rates if they are missing or more
+than an hour old.
+
+### The settings page said the extension could not read pages, on every Chrome
+
+The banner meant for a profile set to "on click" showed on fresh installs too.
+It asked `chrome.permissions.contains` for `<all_urls>`, and Chrome answers
+that from the explicit host list alone, which the content script's matches are
+never on since `<all_urls>` moved to the optional list. It now reads
+`chrome.permissions.getAll()`, which reports the content script's origins while
+they are granted and drops them once withheld. Checked in Helium (Chromium 154) both ways,
+by switching the extension's site access to "on click" and back.
+
 ## 2.1.2
 
 - The page-wide `itemscope` fix from 2.1.1 only closed half the hole. Requiring the price to sit on the hovered element's line of descent still let every container that *encloses* the annotation claim it, and on a page whose `<body>` carries the `itemscope` that is most of the page: the empty space beside the "Steam price history" heading on SteamDB kept answering `$39.99`. An enclosing `itemscope` is now searched only when the hovered element carries part of the annotation itself, which is what the release before 2.0.0 did before the subtree lookup was added.

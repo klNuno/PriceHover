@@ -23,12 +23,14 @@ request a day for the rates.
 ## Features
 
 - **Hover or select** a price. Your own currency comes first and is never converted away from.
-- **`$` means what the site means.** `$49` on a `.ca` shop is Canadian, `1 099 kr` on a `.no` shop is Norwegian, `¥` on a `.cn` shop is yuan.
+- **`$` means what the site means.** `$49` on a `.ca` shop is Canadian, `1 099 kr` on a `.no` shop is Norwegian, `¥` on a `.cn` shop is yuan. A table row that names its currency decides for the prices in it, and a site that names its currency once is remembered for the whole site.
+- **Lock a site's currency** when you know better: `amazon.com` with `$ = CAD`, from the settings page.
 - **Prose stays prose.** `try 100 times` and `error code 500 KD` are not prices. Every ambiguous token has a rejection test behind it.
 - **Ranges.** `€10 – €20`, `€10-20` and `10-20 kr` convert as one range.
 - **Click a row to copy** the amount.
 - **Inline mode.** Write your currency beside every price instead of waiting for a hover. It only ever appends.
 - **Two switches.** A master one and a per-site pause, both in the popup.
+- **A calculator in the popup.** `20 chf`, `100 eur jpy`, and `0.5 btc` once crypto is on.
 - **Rounding.** `≈€1,235` where `€1,234.56` would pretend to a precision a conversion does not have.
 - **Sub-cent prices stay prices.** A yen is `€0.0061`, not `€0.01`, and never `€0`. Per-unit and prorated prices (`$0.0075`) are read too.
 - **Crypto, if you want it.** 24 assets including BTC, ETH, XMR, USDT, USDC and DOGE. Off by default, one extra host, granted by you and given back when you switch it off.
@@ -37,7 +39,7 @@ request a day for the rates.
 > [!NOTE]
 > 2.0.0 changed how `$` is read. On a country domain it now converts as that
 > country's dollar, not as USD. Settings → **Behaviour** → *Read `$`, `kr` and
-> `¥` from the site's country* puts the old reading back.
+> `¥` from the site* puts the old reading back, except on sites you locked.
 
 ## The same `$49.99`, two shops
 
@@ -49,10 +51,19 @@ The country comes from the domain, or from the region in `<html lang>` when the
 domain says nothing. Vanity endings (`.co`, `.io`, `.ai`, `.me`, `.tv`, `.to`)
 are ignored, because the country in them means nothing.
 
+Two things outrank the domain: a code printed beside the price (`$49 CAD`), and
+the row the price sits in, so SteamDB's `¥ 69` on the Chinese Yuan row is yuan
+while the `¥ 1,980` on the Japanese Yen row stays yen. One thing ranks below it:
+what the site's own pages said, remembered per site on your machine and listed
+in the settings, where each entry can be removed. A lock you set yourself beats
+all of them.
+
 | On the page | Read as |
 | --- | --- |
 | `¥74,800` on a `.jp` shop | 74 800 JPY |
 | `¥74,800` on a `.cn` shop | 74 800 CNY |
+| `$49.99 CAD` anywhere | 49.99 CAD |
+| `¥ 69` on a row labelled Chinese Yuan | 69 CNY |
 | `₹1,49,900` | 149 900 INR (Indian lakh grouping) |
 | `KD 12.500` | 12.500 KWD (three decimals, not thousands) |
 | `€10-20` | a range, 10 to 20 EUR |
@@ -83,7 +94,8 @@ currency. The footer says how old the rates are and refreshes them on demand.
 </p>
 
 Your own currency, the list to convert into and its order, hover delay,
-rounding, inline mode and paused sites.
+rounding, inline mode, paused sites, locked site currencies, and the currencies
+read from each site.
 
 ## Privacy
 

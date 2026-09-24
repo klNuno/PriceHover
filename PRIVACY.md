@@ -4,7 +4,7 @@ title: Privacy Policy
 ---
 # Privacy policy
 
-**Last updated: 2026-08-01. Applies to version 2.1.0.**
+**Last updated: 2026-09-25. Applies to version 2.2.0.**
 
 ## The short version
 
@@ -29,13 +29,18 @@ extension touches and where it goes.
 | Data | Where it goes |
 |---|---|
 | The text of pages you visit | Read in the page, never sent anywhere. Used to find prices. |
-| The page's domain and `<html lang>` | Read in the page, never sent anywhere, never stored. Used to tell a Canadian `$` from an American one. |
-| Your settings (currencies, rounding, hover delay, paused sites) | `chrome.storage.local` on your own machine. Never sent anywhere. |
+| The page's domain and `<html lang>` | Read in the page, never sent anywhere. Used to tell a Canadian `$` from an American one. |
+| The currency a site names for itself | Only when a page says clearly which currency its `$`, `kr` or `¥` is (a currency picker showing `CAD`, prices written `$49 CAD`): that site's domain and that one code, in `chrome.storage.local` on your own machine. Never sent anywhere, never written from a private window, capped at 300 sites, listed on the settings page where each entry can be removed. |
+| Your settings (currencies, rounding, hover delay, paused sites, sites whose currency you locked) | `chrome.storage.local` on your own machine. Never sent anywhere. |
 | Exchange rates | Fetched from `open.er-api.com`, cached on your machine. |
 | The address of the tab you are on | Read only in the popup, only while it is open, only to show you which site the pause switch applies to. Never stored, never sent. |
 
-**No browsing history is kept.** The paused-sites list contains only the domains
-you chose to pause, and nothing else is ever written to storage.
+**No browsing history is kept.** The paused and locked lists contain only the
+domains you put there. The only domains the extension writes on its own are
+those of sites that named their own currency, with that currency and nothing
+else: no address, no page, no time of visit beyond the last one, which is what
+decides which entry goes first when the list is full. "Reset to defaults"
+empties it along with everything else.
 
 ## Permissions, and why each one exists
 
@@ -78,9 +83,10 @@ the only thing that changes any of the above.
 - The request is `GET https://api.coingecko.com/api/v3/simple/price` with a
   fixed list of assets. Like the fiat one, it is made by the background worker,
   carries no page data and no identifier, and it names no page you have visited.
-- At most once an hour, and only when a crypto amount is actually in play:
-  either a crypto row in your list, or a price written in crypto on a page you
-  are reading. A session that meets neither makes no crypto request at all.
+- At most once an hour, and only when a crypto amount is actually in play: a
+  crypto row in your list, a price written in crypto on a page you are reading,
+  or a crypto amount typed into the popup's calculator. A session that meets
+  none of these makes no crypto request at all.
 - Turning the switch back off removes the permission and deletes the cached
   crypto rates. Revoking it from your browser's own permissions panel does the
   same thing.
@@ -95,9 +101,11 @@ log at their end.
 
 - **Draws a tooltip** in a closed shadow root, so neither the page's styles nor
   its scripts can read or alter it.
-- **Inline mode**, off by default: appends your currency next to a price. It
-  never rewrites the site's own text, and it stays out of text fields, editable
-  areas, `code` and `pre`.
+- **Inline mode**, off by default: appends your currency next to a price, or,
+  if you choose "Mine only", shows it in place of the price. The site's own
+  text is never rewritten either way: in place of it means the text is hidden
+  by a style and comes back untouched when the setting is turned off. It stays
+  out of text fields, editable areas, `code` and `pre`.
 - **Copies to your clipboard**, and only when you click a row in the tooltip.
 
 ## Changes
