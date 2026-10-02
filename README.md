@@ -22,6 +22,7 @@
   <a href="#install">Install</a> ·
   <a href="#what-it-reads">What it reads</a> ·
   <a href="#inline-mode">Inline mode</a> ·
+  <a href="#crypto-both-ways">Crypto</a> ·
   <a href="#the-popup-is-also-a-converter">Popup</a> ·
   <a href="#privacy">Privacy</a>
 </p>
@@ -107,6 +108,30 @@ all of them.
 
 Off by default. The site's own text is never rewritten, only appended to, and
 text fields, editable areas, `code` and `pre` are left alone.
+
+## Crypto, both ways
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./screenshots/crypto-dark.png" />
+    <img src="./screenshots/crypto-light.png" alt="Left, a licence priced 0.0042 BTC read as euros, dollars and pounds. Right, a $49.99 backpack read in euros, pounds, bitcoin and ether." width="820" />
+  </picture>
+</p>
+
+Off by default. One switch in the settings turns it on, your browser asks for
+`api.coingecko.com`, and from then on:
+
+- **Crypto prices on a page convert like any other.** `0.0042 BTC`, `₿0.05`,
+  `Ξ0.085`, `250 USDT`, and the tickers XMR, USDC, DOGE, XRP, LTC and BCH.
+  `ETH 8092` stays a Zurich postal code and `BTC 10000` a headline.
+- **Any of the 24 assets can sit in your list**, so a price in dollars also
+  reads in bitcoin or ether.
+- **The popup takes them too**: `0.5 btc`, `100 eur eth`.
+- **Rates have their own clock**, refreshed hourly while the switch is on, with
+  a warning on the card when they are stale.
+
+Switching it off hands the permission back, and nothing contacts the second
+host again.
 
 ## The popup is also a converter
 
