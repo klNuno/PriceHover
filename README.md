@@ -1,9 +1,5 @@
 <h1 align="center">PriceHover</h1>
-<p align="center">Hover any price on any page and read it in your own currency. Chrome and Firefox, MV3, built with WXT and Svelte 5.</p>
-
-<p align="center">
-  <img src="./screenshots/demo-hover.webp" alt="Hovering a yen price on a shop page, clicking a tooltip row to copy the amount, then hovering a price range" />
-</p>
+<p align="center">Hover any price on any page and read it in your own currency.<br />Chrome and Firefox, MV3, built with WXT and Svelte 5.</p>
 
 <p align="center">
   <a href="https://github.com/klNuno/PriceHover/releases"><img src="https://img.shields.io/github/v/release/klNuno/PriceHover?display_name=tag" alt="Release" /></a>
@@ -12,6 +8,22 @@
   <a href="#install"><img src="https://img.shields.io/badge/browser-Chrome%20%7C%20Firefox-0078D6" alt="Browser" /></a>
   <a href="https://wxt.dev/"><img src="https://img.shields.io/badge/WXT-0.20-67D75B" alt="WXT" /></a>
   <a href="https://svelte.dev/"><img src="https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte" alt="Svelte" /></a>
+  <a href="https://addons.mozilla.org/firefox/addon/pricehover"><img src="https://img.shields.io/amo/v/pricehover?label=Firefox%20Add-ons" alt="Firefox Add-ons" /></a>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./screenshots/demo-dark.webp" />
+    <img src="./screenshots/demo-light.webp" alt="Hovering a yen price on a shop page opens a card with the amount in euros, dollars and pounds. A click on a row copies it, then a price range converts as one range." width="820" />
+  </picture>
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#what-it-reads">What it reads</a> ·
+  <a href="#inline-mode">Inline mode</a> ·
+  <a href="#the-popup-is-also-a-converter">Popup</a> ·
+  <a href="#privacy">Privacy</a>
 </p>
 
 ## Why
@@ -41,15 +53,30 @@ request a day for the rates.
 > country's dollar, not as USD. Settings → **Behaviour** → *Read `$`, `kr` and
 > `¥` from the site* puts the old reading back, except on sites you locked.
 
-## The same `$49.99`, two shops
+## What it reads
+
+### The same `$49.99`, two shops
 
 <p align="center">
-  <img src="./screenshots/context.png" alt="The same $49.99 on a .com shop and on a .ca shop, converting to €44 and €31" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./screenshots/context-dark.png" />
+    <img src="./screenshots/context-light.png" alt="The same $49.99 on a .com shop and on a .ca shop: 44 euros on the first, 31 on the second, with a note that the currency was read from the site" width="820" />
+  </picture>
 </p>
 
 The country comes from the domain, or from the region in `<html lang>` when the
 domain says nothing. Vanity endings (`.co`, `.io`, `.ai`, `.me`, `.tv`, `.to`)
-are ignored, because the country in them means nothing.
+are ignored, because the country in them means nothing. When the site decided
+and not the price, the card says so.
+
+### One table, eight currencies, three symbols
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./screenshots/table-dark.png" />
+    <img src="./screenshots/table-light.png" alt="A regional price table with inline mode on: three dollar rows, two yen rows and three krone rows, each converted from the currency its row names" width="820" />
+  </picture>
+</p>
 
 Two things outrank the domain: a code printed beside the price (`$49 CAD`), and
 the row the price sits in, so SteamDB's `¥ 69` on the Chinese Yuan row is yuan
@@ -72,7 +99,10 @@ all of them.
 ## Inline mode
 
 <p align="center">
-  <img src="./screenshots/inline.png" alt="A price block with the euro equivalent appended in brackets after each yen amount" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./screenshots/inline-dark.png" />
+    <img src="./screenshots/inline-light.png" alt="A product page where every yen amount is followed by its euro equivalent in brackets" width="820" />
+  </picture>
 </p>
 
 Off by default. The site's own text is never rewritten, only appended to, and
@@ -81,16 +111,22 @@ text fields, editable areas, `code` and `pre` are left alone.
 ## The popup is also a converter
 
 <p align="center">
-  <img src="./screenshots/popup.png" alt="The PriceHover popup converting 250 CHF into a list of currencies" width="300" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./screenshots/popup-dark.png" />
+    <img src="./screenshots/popup-light.png" alt="The PriceHover popup twice: converting 250 CHF, then 0.5 BTC, into a list of currencies" width="640" />
+  </picture>
 </p>
 
-Type `250 chf`, `20 usd jpy`, or a bare number to convert from your own
-currency. The footer says how old the rates are and refreshes them on demand.
+Type `250 chf`, `20 usd jpy`, `0.5 btc` once crypto is on, or a bare number to
+convert from your own currency. The footer says how old the rates are and refreshes them on demand.
 
 ## Settings
 
 <p align="center">
-  <img src="./screenshots/options.png" alt="The PriceHover settings page: currencies, behaviour, paused sites, about" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./screenshots/options-dark.png" />
+    <img src="./screenshots/options-light.png" alt="The PriceHover settings page: currencies, behaviour, sites with paused, locked and remembered entries, about" width="760" />
+  </picture>
 </p>
 
 Your own currency, the list to convert into and its order, hover delay,
