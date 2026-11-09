@@ -28,6 +28,8 @@ const both = (token: string, code: string): SymbolSpec =>
   ({ token, code, prefix: true, suffix: true, tight: false });
 const prefixOnly = (token: string, code: string): SymbolSpec =>
   ({ token, code, prefix: true, suffix: false, tight: false });
+const suffixOnly = (token: string, code: string): SymbolSpec =>
+  ({ token, code, prefix: false, suffix: true, tight: false });
 
 const SYMBOLS: SymbolSpec[] = [
   // Sign symbols, unambiguous, allowed on either side.
@@ -36,6 +38,11 @@ const SYMBOLS: SymbolSpec[] = [
   both('₱', 'PHP'), both('฿', 'THB'), both('₺', 'TRY'), both('₽', 'RUB'),
   both('₴', 'UAH'), both('₫', 'VND'), both('₸', 'KZT'), both('₪', 'ILS'),
   both('₡', 'CRC'), both('﷼', 'SAR'), both('د.إ', 'AED'),
+
+  // Japanese storefronts put 円 after the amount; page translation can turn
+  // it into a glued or spaced English yen suffix (for example, 28,133Yen).
+  suffixOnly('円', 'JPY'), suffixOnly('Yen', 'JPY'),
+  suffixOnly('yen', 'JPY'), suffixOnly('YEN', 'JPY'),
 
   // Qualified dollar and peso variants.
   both('US$', 'USD'), both('COL$', 'COP'), both('CLP$', 'CLP'),
