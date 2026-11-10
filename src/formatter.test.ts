@@ -215,3 +215,22 @@ describe('unknown currency codes', () => {
     expect(formatCurrencyAmount(12.3, 'NOTACODE')).toBe('12.30 NOTACODE');
   });
 });
+
+describe('source display, the page price in the tooltip header', () => {
+  test.each([
+    [7.89, 'GBP', '£7.89'],
+    [5, 'USD', '$5.00'],
+    [3.459, 'USD', '$3.459'],
+    [1299, 'JPY', '¥1,299'],
+    [0.0075, 'USD', '$0.0075'],
+    [12.5, 'KWD', 'KWD 12.500'],
+    [1.23456, 'USDT', '1.23456 USDT'],
+    [0.00000015, 'BTC', '0.00000015 BTC'],
+  ])('%p %s prints every digit, no tilde', (amount, code, text) => {
+    expect(plain(formatCurrencyAmount(amount, code, 'source'))).toBe(text);
+  });
+
+  test('a range keeps its digits too', () => {
+    expect(plain(formatCurrencyRange(1.23456, 2.5, 'USDT', 'source'))).toBe('1.23456 – 2.5 USDT');
+  });
+});

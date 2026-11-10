@@ -61,6 +61,10 @@ const SYMBOLS: SymbolSpec[] = [
   both('kr.', 'SEK'), both('kr', 'SEK'), both('Kr', 'SEK'),
   both('zł', 'PLN'), both('Kč', 'CZK'), both('Ft', 'HUF'),
 
+  // How Japanese shops print yen far more often than with the sign: `1,299円`.
+  // Never in front of the amount. YEN_AFTER_KANA_KANJI says what it may follow.
+  { token: '円', code: 'JPY', prefix: false, suffix: true, tight: false },
+
   // A bare R glued to the digits is South African rand. Detached from them it
   // is a letter, unless the amount is printed like money: see
   // LOOSE_NEEDS_PRICE_SHAPE.
@@ -194,12 +198,24 @@ const SUFFIX_ALT = alternation(SYMBOLS.filter((s) => s.suffix));
 // An ISO code gets its own branch because it needs the space the symbols do
 // not: `RM5` and `Rp5000` are how those are printed, while a three-letter code
 // glued to digits is `CRC32`, `PHP7`, `COP21`, and never a price.
+//
+// Japanese runs words and numbers together: `税込1,299円`, `1,980円以上`. Only
+// beside `円` may the amount touch a kana or a kanji, and never a kanji numeral
+// in front, where the digits are the tail of a bigger amount: `1万5000円` is
+// fifteen thousand yen, and `5000円` read out of it would be a wrong price.
+// Neither piece holds a capture group, so the group layout above is unchanged.
+const KANJI_NUMERALS = '〇一二三四五六七八九十百千万萬億兆';
+const YEN_AFTER_KANA_KANJI =
+  `(?<=[\\p{Script=Han}\\p{Script=Hiragana}\\p{Script=Katakana}])` +
+  `(?<![${KANJI_NUMERALS}])(?=${AMOUNT}${SPACE}?円)`;
+const PRICE_END = `(?:(?<=円)(?!\\d)|(?![\\p{L}\\d]))(?![.,]\\d)`;
+
 const PRICE_SOURCE =
   `(?:(?<![\\p{L}\\d])(${TIGHT_ALT})(${AMOUNT})` +
   `|(?<![\\p{L}\\d])(${PREFIX_ALT})${SPACE}?(${AMOUNT})` +
   `|(?<![\\p{L}\\d])(${CODE_ALT})${SPACE}(${AMOUNT})` +
-  `|(?<![\\p{L}\\d.,])(${AMOUNT})${SPACE}?(${SUFFIX_ALT}))` +
-  `(?![\\p{L}\\d])(?![.,]\\d)`;
+  `|(?:(?<![\\p{L}\\d.,])|${YEN_AFTER_KANA_KANJI})(${AMOUNT})${SPACE}?(${SUFFIX_ALT}))` +
+  PRICE_END;
 
 const PRICE_REGEX = new RegExp(PRICE_SOURCE, 'u');
 const GLOBAL_PRICE_REGEX = new RegExp(PRICE_SOURCE, 'gu');

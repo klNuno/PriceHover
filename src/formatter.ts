@@ -2,6 +2,14 @@ import { CRYPTO_BY_CODE, type CryptoAsset } from './crypto';
 import { uiLocale } from './i18n';
 import type { Rounding } from './settings';
 
+/**
+ * The user's rounding for converted amounts, or `source` for the page's own
+ * price in the tooltip header: every digit the page printed, at least the
+ * minor unit, never a tilde. `≈£7.9` under a page that says £7.89, or
+ * `≈1.23 USDT` for 1.23456 USDT, read as a wrong number.
+ */
+export type Display = Rounding | 'source';
+
 /** `Intl` puts one of these between a currency code and its number; so do we. */
 const NBSP = ' ';
 
@@ -76,9 +84,16 @@ function significantDecimals(magnitude: number, digits: number): number {
   return Math.max(0, Math.ceil(-Math.log10(magnitude)) - 1 + digits);
 }
 
-function decimalsFor(amount: number, natural: number, rounding: Rounding): number {
+/** Decimals in the shortest form of `amount`: 3.459 → 3, 1.5e-7 → 8. */
+function printedDecimals(amount: number): number {
+  const [mantissa, exponent] = String(Math.abs(amount)).split('e');
+  return Math.max(0, (mantissa.split('.')[1]?.length ?? 0) - Number(exponent ?? 0));
+}
+
+function decimalsFor(amount: number, natural: number, rounding: Display): number {
   const magnitude = Math.abs(amount);
   if (magnitude === 0) return natural;
+  if (rounding === 'source') return Math.min(MAX_DECIMALS, Math.max(natural, printedDecimals(amount)));
 
   // `integer` keeps its promise while a whole number still says something. It
   // breaks it only where keeping it would print zero, which is not a rounder
@@ -105,8 +120,8 @@ function decimalsFor(amount: number, natural: number, rounding: Rounding): numbe
  * 1234.56 SHIB into 1,235 SHIB the way ISO 4217 makes $39.362 into $39.36, so
  * that number moved and says so.
  */
-function coarsened(rounding: Rounding, decimals: number, natural: number): boolean {
-  return !(rounding === 'exact' && decimals === natural);
+function coarsened(rounding: Display, decimals: number, natural: number): boolean {
+  return rounding !== 'source' && !(rounding === 'exact' && decimals === natural);
 }
 
 /**
@@ -129,7 +144,7 @@ function isApproximate(amount: number, decimals: number): boolean {
 export function formatCurrencyAmount(
   amount: number,
   code: string,
-  rounding: Rounding = 'exact'
+  rounding: Display = 'exact'
 ): string {
   const asset = CRYPTO_BY_CODE.get(code);
   if (asset) return formatCryptoAmount(amount, asset, rounding);
@@ -162,7 +177,7 @@ export function formatCurrencyAmount(
  * worth something displayed as nothing. A plain decimal formatter plus the
  * ticker has neither problem.
  */
-function formatCryptoAmount(amount: number, asset: CryptoAsset, rounding: Rounding): string {
+function formatCryptoAmount(amount: number, asset: CryptoAsset, rounding: Display): string {
   const decimals = decimalsFor(amount, asset.decimals, rounding);
   const magnitude = Math.abs(amount);
   if (magnitude > 0 && magnitude < SMALLEST / 2) {
@@ -205,7 +220,7 @@ export function formatCurrencyRange(
   min: number,
   max: number,
   code: string,
-  rounding: Rounding = 'exact'
+  rounding: Display = 'exact'
 ): string {
   const low = formatCurrencyAmount(min, code, rounding);
   const high = formatCurrencyAmount(max, code, rounding);

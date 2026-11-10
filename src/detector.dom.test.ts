@@ -137,3 +137,11 @@ describe('text detection in the DOM', () => {
     expect(detectPricesFromElement(el)).toEqual([]);
   });
 });
+
+describe('yen suffix in its own element', () => {
+  test("reads Rakuten's markup, digits and 円 in separate nodes", () => {
+    const el = target(`<div class="price--3zUvK">1,299<span>円〜</span></div>`, 'div');
+    expect(detectPricesFromElement(el).map((p) => [p.amount, p.currencyCode]))
+      .toEqual([[1299, 'JPY']]);
+  });
+});

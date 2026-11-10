@@ -42,12 +42,11 @@
   });
 
   const sourceLabel = $derived.by(() => {
-    const { sources, sourceRounding } = $tooltipState;
-    return sources
+    return $tooltipState.sources
       .map((s) =>
         s.amountMax === undefined
-          ? formatCurrencyAmount(s.amount, s.currencyCode, sourceRounding)
-          : formatCurrencyRange(s.amount, s.amountMax, s.currencyCode, sourceRounding)
+          ? formatCurrencyAmount(s.amount, s.currencyCode, 'source')
+          : formatCurrencyRange(s.amount, s.amountMax, s.currencyCode, 'source')
       )
       .join(' · ');
   });

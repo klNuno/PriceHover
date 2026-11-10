@@ -397,3 +397,35 @@ describe('normalizeAmount', () => {
     expect(normalizeAmount('1.234,567', 'EUR')).toBe(1234567);
   });
 });
+
+describe('yen written as 円', () => {
+  // Japanese shops print the suffix far more often than the sign: Rakuten
+  // writes `1,299円〜` and showed no tooltip at all before 2.2.1.
+  test.each([
+    ['1,299円', 1299],
+    ['1,299 円', 1299],
+    ['1,299円〜', 1299],
+    ['税込1,299円', 1299],
+    ['価格：3,980円（税込）', 3980],
+    ['1,980円以上で送料無料', 1980],
+  ])('%s', (text, amount) => {
+    expect(detect(text)).toEqual({ amount, code: 'JPY' });
+  });
+
+  test('stays yen on a Chinese page', () => {
+    const [price] = detectAllFromText('1,299円', makeTokenResolver('jd.cn', 'zh')!);
+    expect(price.currencyCode).toBe('JPY');
+  });
+
+  // A kanji numeral in front means the digits are only the tail of the amount:
+  // `1万5000円` is fifteen thousand yen, never five thousand.
+  test.each(['1万5000円', '2千500円', '3億1000円', '1,299円5', 'A1299円'])(
+    'rejects %s', (text) => {
+      expect(detect(text)).toBeNull();
+    }
+  );
+
+  test('is never a prefix', () => {
+    expect(detect('円 1299')).toBeNull();
+  });
+});
