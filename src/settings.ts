@@ -1,6 +1,7 @@
 import { isCryptoCode } from './crypto';
-import { ASSET_BY_CODE, CURRENCY_BY_CODE } from './currencies';
+import { ASSET_BY_CODE, CURRENCIES, CURRENCY_BY_CODE, flagToCountryCode } from './currencies';
 import { familyOfCode } from './families';
+import { regionFromLanguage } from './locale';
 import { STORAGE, DEFAULT_CURRENCIES } from './types';
 
 /**
@@ -266,10 +267,46 @@ export interface SettingsLoad {
   error?: unknown;
 }
 
-function firstRunSettings(): Settings {
+/** The euro area on 2026-01-01, Bulgaria included. */
+const EURO_REGIONS = [
+  'AT', 'BE', 'BG', 'CY', 'DE', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR',
+  'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PT', 'SI', 'SK',
+];
+
+/** Region subtag → currency: each currency's own flag, plus the euro area. */
+const REGION_TO_CURRENCY = new Map<string, string>([
+  ...CURRENCIES.map((c) => [flagToCountryCode(c.flag).toUpperCase(), c.code] as const),
+  ...EURO_REGIONS.map((region) => [region, 'EUR'] as const),
+]);
+
+/**
+ * The currency of the first browser language that names a region: `en-US` is
+ * dollars, `fr-FR` euros, `ja-JP` yen. A bare `en` or `fr` says nothing about
+ * money, so it is skipped, and `null` means no language did.
+ */
+export function currencyForLanguages(languages: readonly string[]): string | null {
+  for (const language of languages) {
+    const region = regionFromLanguage(language);
+    const code = region ? REGION_TO_CURRENCY.get(region) : undefined;
+    if (code) return code;
+  }
+  return null;
+}
+
+/**
+ * A fresh install guesses the user's own currency from the browser languages
+ * instead of assuming euros: on amazon.com, a fresh install in the US used to
+ * convert into EUR, a currency nobody there chose. The welcome page shows the
+ * guess and changes it in one click.
+ */
+export function firstRunSettings(
+  languages: readonly string[] = globalThis.navigator?.languages ?? []
+): Settings {
+  const baseCurrency = currencyForLanguages(languages) ?? DEFAULT_SETTINGS.baseCurrency;
   return {
     ...defaultSettings(),
-    targetCurrencies: DEFAULT_CURRENCIES.filter((c) => c !== DEFAULT_SETTINGS.baseCurrency),
+    baseCurrency,
+    targetCurrencies: DEFAULT_CURRENCIES.filter((c) => c !== baseCurrency),
   };
 }
 

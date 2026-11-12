@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
-  DEFAULT_SETTINGS, defaultSettings, displayCurrencies, isActiveOn, isLockableCode, isSiteDisabled,
+  DEFAULT_SETTINGS, currencyForLanguages, defaultSettings, displayCurrencies, firstRunSettings, isActiveOn, isLockableCode, isSiteDisabled,
   lockedCurrency, migrateLegacy, normalizeHostname, parseHostnameInput, parseSettings, readSettings, updateSettings, wantsCrypto,
 } from './settings';
 import { STORAGE } from './types';
@@ -266,7 +266,7 @@ describe('readSettings', () => {
     const failed = await readSettings();
     expect(failed.source).toBe('failed');
     // Still usable, so the UI can render something; just not writable.
-    expect(failed.settings.baseCurrency).toBe(DEFAULT_SETTINGS.baseCurrency);
+    expect(failed.settings).toEqual(firstRunSettings());
   });
 });
 
@@ -310,5 +310,40 @@ describe('updateSettings', () => {
     const data = stubStorage({ [STORAGE.SETTINGS]: { baseCurrency: 'EUR' } });
     await updateSettings({ targetCurrencies: new Proxy(['JPY', 'USD'], {}) });
     expect(Array.isArray((data[STORAGE.SETTINGS] as { targetCurrencies: unknown }).targetCurrencies)).toBe(true);
+  });
+});
+
+describe('first run', () => {
+  test.each([
+    [['en-US', 'en'], 'USD', ['EUR', 'GBP']],
+    [['fr-FR', 'fr'], 'EUR', ['USD', 'GBP']],
+    [['en-GB'], 'GBP', ['EUR', 'USD']],
+    [['ja-JP'], 'JPY', ['EUR', 'USD', 'GBP']],
+    [['de-AT'], 'EUR', ['USD', 'GBP']],
+    [['bg-BG'], 'EUR', ['USD', 'GBP']],
+    [['pt-BR'], 'BRL', ['EUR', 'USD', 'GBP']],
+    [['zh-Hant-TW'], 'TWD', ['EUR', 'USD', 'GBP']],
+  ])('%p gives %s', (languages, base, targets) => {
+    const settings = firstRunSettings(languages);
+    expect(settings.baseCurrency).toBe(base);
+    expect(settings.targetCurrencies).toEqual(targets);
+  });
+
+  test('a language with no region skips to the next one', () => {
+    expect(currencyForLanguages(['en', 'en-CA'])).toBe('CAD');
+  });
+
+  test('no region anywhere keeps the euro default', () => {
+    expect(firstRunSettings(['en', 'fr']).baseCurrency).toBe('EUR');
+    expect(firstRunSettings([]).baseCurrency).toBe('EUR');
+  });
+
+  test('a region with no listed currency is skipped', () => {
+    expect(currencyForLanguages(['es-AR', 'es-ES'])).toBe('EUR');
+  });
+
+  test('the first run is a valid settings object', () => {
+    const settings = firstRunSettings(['en-US']);
+    expect(parseSettings(settings)).toEqual(settings);
   });
 });
