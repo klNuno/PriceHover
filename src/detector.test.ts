@@ -16,6 +16,12 @@ describe('detects real prices', () => {
     ['€12,50', 12.5, 'EUR'],
     ['£1,234.56', 1234.56, 'GBP'],
     ['¥1980', 1980, 'JPY'],
+    ['14,036円(税込)', 14036, 'JPY'],
+    ['500円', 500, 'JPY'],
+    ['1,200 円', 1200, 'JPY'],
+    ['28,133Yen (tax included)', 28133, 'JPY'],
+    ['14,036 yen (tax included)', 14036, 'JPY'],
+    ['500YEN', 500, 'JPY'],
     ['1.234,56 €', 1234.56, 'EUR'],
     ['1 234,56 €', 1234.56, 'EUR'],
     ['199 kr', 199, 'SEK'],
@@ -89,6 +95,9 @@ describe('rejects prose that looks like a price', () => {
     'RAM 16 GB',
     'covid 19',
     'weight 250 g',
+    '半径500円形',          // 円 in a Japanese word is not a yen suffix
+    '円500',                // yen character is a suffix, not a prefix
+    '500Yenisei',           // a word containing Yen is not a currency suffix
     'EURO 20',               // trailing letter breaks the token
     '€1234.5678',            // rather nothing than a truncated €1234.56
     '$0',                    // zero is not a price
