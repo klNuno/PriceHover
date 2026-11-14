@@ -4,7 +4,7 @@ title: Privacy Policy
 ---
 # Privacy policy
 
-**Last updated: 2026-09-25. Applies to version 2.2.0.**
+**Last updated: 2026-11-14. Applies to version 2.2.1.**
 
 ## The short version
 
@@ -31,6 +31,7 @@ extension touches and where it goes.
 | The text of pages you visit | Read in the page, never sent anywhere. Used to find prices. |
 | The page's domain and `<html lang>` | Read in the page, never sent anywhere. Used to tell a Canadian `$` from an American one. |
 | The currency a site names for itself | Only when a page says clearly which currency its `$`, `kr` or `¥` is (a currency picker showing `CAD`, prices written `$49 CAD`): that site's domain and that one code, in `chrome.storage.local` on your own machine. Never sent anywhere, never written from a private window, capped at 300 sites, listed on the settings page where each entry can be removed. |
+| Your browser's languages | Read once, on a fresh install, to guess your own currency (`en-US` gives dollars, `fr-FR` euros). Only the currency picked is kept, in your settings. Never sent anywhere. |
 | Your settings (currencies, rounding, hover delay, paused sites, sites whose currency you locked) | `chrome.storage.local` on your own machine. Never sent anywhere. |
 | Exchange rates | Fetched from `open.er-api.com`, cached on your machine. |
 | The address of the tab you are on | Read only in the popup, only while it is open, only to show you which site the pause switch applies to. Never stored, never sent. |
@@ -49,6 +50,7 @@ empties it along with everything else.
 | Access to page content on all sites (`content_scripts: <all_urls>`) | A price can be on any page, so the detector has to run on any page. It reads text and, in inline mode, appends a label next to a price. It never sends page data anywhere. Your browser may describe this as "read and change all your data on all websites", which is the standard wording for any content script, and it is the only thing the extension has ever asked for here. It is also what lets the popup name the site you are on, so the pause switch can name it. |
 | `storage` | Keep your settings between sessions. |
 | `open.er-api.com` host access | Fetch exchange rates. The only network destination the extension has by default. |
+| Access to all sites, asked again (`<all_urls>`) | **Optional, never asked on its own.** A browser that was once told to run the extension only "on click" keeps withholding page access from every later version. The settings page then shows a notice, and this permission is what its button asks for to give the access back. It is the same access the content script line above already describes, nothing more. |
 | `api.coingecko.com` host access | **Optional, not granted at install.** Fetch crypto rates, and only while you have crypto conversion switched on. Turning the switch off gives the permission back. |
 
 The extension deliberately does **not** ask for `tabs`, `activeTab`, `alarms`,

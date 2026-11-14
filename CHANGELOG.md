@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.2.1
+
+### A fresh install showed nothing on amazon.com or amazon.co.uk
+
+Every price already in your own currency or in one of your targets was skipped.
+A fresh install had euros as its own currency and USD and GBP as targets, so
+the first two shops anyone tries answered nothing. Only your own currency is
+skipped now: a price in a target lists your currency and the other targets.
+
+Your own currency is also guessed on a fresh install, from the region of your
+browser's languages (`en-US` gives dollars, `fr-FR` euros), and stays euros
+when no language names a region. The settings page that opens on install shows the
+guess, ready to change.
+
+### Japanese prices written with 円 or yen
+
+`1,290円`, `14,036 yen` and `28,133Yen`, what Japanese shops and their
+machine translations print, went unread: only `¥` was. `円`, `yen`, `Yen` and
+`YEN` are now read after the amount, never before it, and not inside a word, so
+`円500` and `半径500円形` stay text. Contributed by Cameron8310 (#3).
+
+### The card's header rounded the page's own price
+
+The header repeats the price the page printed, and it went through the rounding
+setting: `£7.89` showed as `≈£7.9`, `1.23456 USDT` as `≈1.23 USDT`. It now
+prints every digit the page had, at least the currency's minor unit, and no
+tilde.
+
 ## 2.2.0
 
 ### The extension ran on one tab at a time, and only after a click
